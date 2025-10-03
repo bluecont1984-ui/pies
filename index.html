@@ -1,0 +1,2383 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zaawansowana Prognoza Aktywności Ryb Drapieżnych z Uczeniem Maszynowym</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0a9396">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Prognoza Ryb">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #eef2f5;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        #container {
+            background-color: #ffffff;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            width: 100%;
+            max-width: 700px;
+        }
+        h1 {
+            color: #005f73;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #input-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input[type="text"], select {
+            flex-grow: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            background-color: #0a9396;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover { background-color: #005f73; }
+        .results-section {
+            border-top: 1px solid #e0e0e0;
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+        h2 { color: #005f73; text-align: center; margin-bottom: 15px; }
+        .main-score {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .activity-result {
+            font-size: 2em;
+            font-weight: bold;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .excellent { background-color: #d4edda; color: #155724; }
+        .good { background-color: #fff3cd; color: #856404; }
+        .moderate { background-color: #e2e3e5; color: #383d41; }
+        .poor { background-color: #f8d7da; color: #721c24; }
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        @media (max-width: 600px) {
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .factor-list ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        .factor-list li {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .factor-list .positive { border-left: 4px solid #28a745; }
+        .factor-list .negative { border-left: 4px solid #dc3545; }
+        .factor-list .neutral { border-left: 4px solid #6c757d; }
+        .tip {
+            background-color: #e2f3f5;
+            border-left: 5px solid #0a9396;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        #loader { 
+            text-align: center; 
+            display: none; 
+            padding: 20px;
+        }
+        #loader.active {
+            display: block;
+        }
+        #loader::after {
+            content: "";
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(10, 147, 150, 0.3);
+            border-radius: 50%;
+            border-top-color: #0a9396;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        #pressureChart, #forecastChart, #windChart, #mlChart {
+            height: 200px !important;
+            width: 100% !important;
+        }
+        .trend-indicator {
+            display: inline-block;
+            margin-left: 5px;
+            font-weight: bold;
+        }
+        .trend-up { color: #dc3545; }
+        .trend-down { color: #28a745; }
+        .trend-stable { color: #6c757d; }
+        
+        /* Style dla zakładek */
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #555;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        .tab-button.active {
+            color: #0a9396;
+            border-bottom: 2px solid #0a9396;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .forecast-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .forecast-table th, .forecast-table td {
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid #ddd;
+        }
+        .forecast-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .forecast-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .activity-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-weight: bold;
+            color: white;
+            display: inline-block;
+            min-width: 80px;
+        }
+        .activity-excellent { background-color: #28a745; }
+        .activity-good { background-color: #ffc107; color: #333; }
+        .activity-moderate { background-color: #6c757d; }
+        .activity-poor { background-color: #dc3545; }
+        
+        /* Style dla formularza połowu */
+        .catch-form {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+        .catch-form.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .save-catch-btn {
+            background-color: #28a745;
+        }
+        .save-catch-btn:hover {
+            background-color: #218838;
+        }
+        .cancel-btn {
+            background-color: #6c757d;
+        }
+        .cancel-btn:hover {
+            background-color: #5a6268;
+        }
+        .catch-history {
+            margin-top: 20px;
+        }
+        .catch-history h3 {
+            color: #005f73;
+            margin-bottom: 15px;
+        }
+        .catch-record {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #0a9396;
+        }
+        .catch-record-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .catch-record-date {
+            font-weight: bold;
+            color: #005f73;
+        }
+        .catch-record-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .catch-record-detail {
+            font-size: 14px;
+        }
+        .catch-record-weather {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .catch-record-notes {
+            margin-top: 10px;
+            font-style: italic;
+        }
+        .delete-catch-btn {
+            background-color: #dc3545;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        .delete-catch-btn:hover {
+            background-color: #c82333;
+        }
+        .no-catches {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        /* Style dla kompasu wiatru - ZAAWANSOWANE */
+        .wind-compass-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        .wind-compass {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            margin: 0 auto;
+        }
+        .compass-face {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+            border: 3px solid #dee2e6;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1), inset 0 1px 3px rgba(255,255,255,0.8);
+        }
+        .compass-rose {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .compass-direction-line {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 45%;
+            height: 1px;
+            background-color: #dee2e6;
+            transform-origin: left center;
+        }
+        .compass-direction {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 40%;
+            height: 8px;
+            margin-top: -4px;
+            margin-left: -40%;
+            transform-origin: center;
+            transition: transform 1s ease;
+            z-index: 10;
+        }
+        .compass-arrow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 0 12px 24px 12px;
+            border-color: transparent transparent #dc3545 transparent;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        .compass-arrow::after {
+            content: '';
+            position: absolute;
+            top: 24px;
+            left: -10px;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 20px 10px 0 10px;
+            border-color: #5cb85c transparent transparent transparent;
+        }
+        .compass-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            background-color: #007bff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 15;
+            box-shadow: 0 0 8px rgba(0,123,255,0.6);
+        }
+        .compass-labels {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .compass-label {
+            position: absolute;
+            font-weight: bold;
+            font-size: 16px;
+            color: #495057;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+        }
+        .label-n {
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .label-ne {
+            top: 15%;
+            right: 15%;
+            font-size: 14px;
+        }
+        .label-e {
+            top: 50%;
+            right: 8px;
+            transform: translateY(-50%);
+        }
+        .label-se {
+            bottom: 15%;
+            right: 15%;
+            font-size: 14px;
+        }
+        .label-s {
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .label-sw {
+            bottom: 15%;
+            left: 15%;
+            font-size: 14px;
+        }
+        .label-w {
+            top: 50%;
+            left: 8px;
+            transform: translateY(-50%);
+        }
+        .label-nw {
+            top: 15%;
+            left: 15%;
+            font-size: 14px;
+        }
+        .wind-info {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 16px;
+            background-color: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .wind-speed {
+            font-weight: bold;
+            color: #0a9396;
+            font-size: 18px;
+        }
+        .wind-direction {
+            font-weight: bold;
+            color: #005f73;
+            font-size: 18px;
+        }
+        .wind-details {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 8px;
+        }
+        .wind-detail {
+            text-align: center;
+        }
+        .wind-detail-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .wind-detail-label {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        /* Style dla GPS */
+        .gps-section {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .gps-coordinates {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .gps-coordinate {
+            flex: 1;
+        }
+        .gps-coordinate input {
+            font-size: 14px;
+        }
+        .gps-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .get-gps-btn {
+            background-color: #007bff;
+            flex: 1;
+        }
+        .get-gps-btn:hover {
+            background-color: #0069d9;
+        }
+        .view-map-btn {
+            background-color: #28a745;
+            flex: 1;
+        }
+        .view-map-btn:hover {
+            background-color: #218838;
+        }
+        .gps-status {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        .catch-record-location {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .location-link {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .location-link:hover {
+            text-decoration: underline;
+        }
+        
+        /* Style dla sekcji uczenia maszynowego */
+        .ml-section {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .ml-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .ml-control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .ml-control-group label {
+            min-width: 120px;
+            font-weight: bold;
+        }
+        .ml-control-group input, .ml-control-group select {
+            flex: 1;
+        }
+        .ml-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .train-btn {
+            background-color: #007bff;
+            flex: 1;
+        }
+        .train-btn:hover {
+            background-color: #0069d9;
+        }
+        .predict-btn {
+            background-color: #28a745;
+            flex: 1;
+        }
+        .predict-btn:hover {
+            background-color: #218838;
+        }
+        .ml-results {
+            background-color: #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .ml-result-item {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .ml-result-label {
+            font-weight: bold;
+        }
+        .ml-result-value {
+            color: #005f73;
+        }
+        .ml-chart-container {
+            margin-top: 20px;
+            height: 250px;
+        }
+        .ml-status {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 10px;
+        }
+        .ml-data-count {
+            background-color: #e2f3f5;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .ml-data-count strong {
+            color: #005f73;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Zaawansowana Prognoza Aktywności Ryb Drapieżnych z Uczeniem Maszynowym</h1>
+        <div id="input-section">
+            <label for="city">Wpisz miejscowość:</label>
+            <input type="text" id="city" placeholder="Wpisz miejscowość, np. Mikołajki" value="Pomiechowo">
+            <label for="species">Gatunek:</label>
+            <select id="species">
+                <option value="szczupak">Szczupak</option>
+                <option value="okon">Okoń</option>
+                <option value="sandacz">Sandacz</option>
+            </select>
+            <button onclick="debouncedFetchData()" aria-label="Sprawdź prognozę aktywności ryb">Sprawdź Prognozę</button>
+        </div>
+        <div id="loader">Ładowanie danych...</div>
+        <div id="results" style="display:none;">
+            <div id="current-weather"></div>
+            <div class="results-section">
+                <div class="tabs">
+                    <button class="tab-button active" onclick="showTab('current')">Aktualna analiza</button>
+                    <button class="tab-button" onclick="showTab('ml')">Uczenie Maszynowe</button>
+                    <button class="tab-button" onclick="showTab('forecast')">Prognoza 24h</button>
+                    <button class="tab-button" onclick="showTab('history')">Historia połowów</button>
+                </div>
+                
+                <div id="current-tab" class="tab-content active">
+                    <div id="activity-score" class="main-score"></div>
+                    <div class="details-grid">
+                        <div id="factor-analysis">
+                            <h3>Analiza czynników</h3>
+                            <div id="factor-list" class="factor-list"></div>
+                        </div>
+                        <div id="pressure-chart-container">
+                            <h3>Trend ciśnienia (aktualne + 24h prognozy)</h3>
+                            <canvas id="pressureChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="details-grid">
+                        <div id="wind-chart-container">
+                            <h3>Kierunek i siła wiatru</h3>
+                            <div class="wind-compass-container">
+                                <div class="wind-compass">
+                                    <div class="compass-face">
+                                        <div class="compass-rose">
+                                            <!-- Linie kierunków -->
+                                            <div class="compass-direction-line" style="transform: rotate(0deg);"></div>
+                                            <div class="compass-direction-line" style="transform: rotate(45deg);"></div>
+                                            <div class="compass-direction-line" style="transform: rotate(90deg);"></div>
+                                            <div class="compass-direction-line" style="transform: rotate(135deg);"></div>
+                                        </div>
+                                        <div class="compass-direction" id="compass-direction">
+                                            <div class="compass-arrow"></div>
+                                        </div>
+                                        <div class="compass-center"></div>
+                                        <div class="compass-labels">
+                                            <div class="compass-label label-n">N</div>
+                                            <div class="compass-label label-ne">NE</div>
+                                            <div class="compass-label label-e">E</div>
+                                            <div class="compass-label label-se">SE</div>
+                                            <div class="compass-label label-s">S</div>
+                                            <div class="compass-label label-sw">SW</div>
+                                            <div class="compass-label label-w">W</div>
+                                            <div class="compass-label label-nw">NW</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="wind-info">
+                                    <div class="wind-details">
+                                        <div class="wind-detail">
+                                            <div class="wind-detail-value" id="wind-speed-value">-</div>
+                                            <div class="wind-detail-label">m/s</div>
+                                        </div>
+                                        <div class="wind-detail">
+                                            <div class="wind-detail-value" id="wind-direction-value">-</div>
+                                            <div class="wind-detail-label">Kierunek</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="empty-cell">
+                            <!-- Pusta komórka dla zachowania układu siatki -->
+                        </div>
+                    </div>
+                    <div id="fishing-tip" class="tip"></div>
+                    
+                    <button id="record-catch-btn" onclick="showCatchForm()" style="margin-top: 20px;">Zapisz obecny połów</button>
+                    
+                    <div id="catch-form" class="catch-form">
+                        <h3>Zapisz informacje o połowie</h3>
+                        
+                        <div class="gps-section">
+                            <h4>Lokalizacja połowu</h4>
+                            <div class="gps-coordinates">
+                                <div class="gps-coordinate">
+                                    <label for="catch-latitude">Szerokość geograficzna:</label>
+                                    <input type="text" id="catch-latitude" placeholder="np. 54.12345" readonly>
+                                </div>
+                                <div class="gps-coordinate">
+                                    <label for="catch-longitude">Długość geograficzna:</label>
+                                    <input type="text" id="catch-longitude" placeholder="np. 18.54321" readonly>
+                                </div>
+                            </div>
+                            <div class="gps-actions">
+                                <button type="button" class="get-gps-btn" onclick="checkLocationPermission()">Pobierz lokalizację GPS</button>
+                                <button type="button" class="view-map-btn" onclick="viewLocationOnMap()">Zobacz na mapie</button>
+                            </div>
+                            <div id="gps-status" class="gps-status">Kliknij "Pobierz lokalizację GPS" aby dodać współrzędne</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="catch-species">Gatunek ryby:</label>
+                            <select id="catch-species">
+                                <option value="szczupak">Szczupak</option>
+                                <option value="okon">Okoń</option>
+                                <option value="sandacz">Sandacz</option>
+                                <option value="inny">Inny</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="catch-weight">Waga (kg):</label>
+                            <input type="number" id="catch-weight" step="0.01" min="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label for="catch-length">Długość (cm):</label>
+                            <input type="number" id="catch-length" step="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="catch-bait">Przynęta:</label>
+                            <input type="text" id="catch-bait" placeholder="np. wobbler, gumka, żyworąbka">
+                        </div>
+                        <div class="form-group">
+                            <label for="catch-notes">Uwagi:</label>
+                            <textarea id="catch-notes" placeholder="Dodatkowe informacje o połowie..."></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button class="save-catch-btn" onclick="saveCatch()">Zapisz połów</button>
+                            <button class="cancel-btn" onclick="hideCatchForm()">Anuluj</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="ml-tab" class="tab-content">
+                    <h3>Analiza oparta na uczeniu maszynowym</h3>
+                    
+                    <div class="ml-data-count">
+                        <p>Dostępnych danych treningowych: <strong id="ml-data-count">0</strong> połowów</p>
+                        <p>Im więcej danych, tym dokładniejsze prognozy!</p>
+                    </div>
+                    
+                    <div class="ml-section">
+                        <h4>Trenuj model predykcyjny</h4>
+                        <div class="ml-controls">
+                            <div class="ml-control-group">
+                                <label>Cecha:</label>
+                                <select id="ml-feature">
+                                    <option value="temperature">Temperatura</option>
+                                    <option value="pressure">Ciśnienie</option>
+                                    <option value="humidity">Wilgotność</option>
+                                    <option value="windSpeed">Prędkość wiatru</option>
+                                </select>
+                            </div>
+                            <div class="ml-control-group">
+                                <label>Algorytm:</label>
+                                <select id="ml-algorithm">
+                                    <option value="linear">Regresja liniowa</option>
+                                    <option value="polynomial">Regresja wielomianowa</option>
+                                </select>
+                            </div>
+                            <div class="ml-buttons">
+                                <button class="train-btn" onclick="trainModel()">Trenuj model</button>
+                                <button class="predict-btn" onclick="predictWithModel()">Prognozuj</button>
+                            </div>
+                        </div>
+                        
+                        <div id="ml-results" class="ml-results" style="display: none;">
+                            <h4>Wyniki analizy</h4>
+                            <div class="ml-result-item">
+                                <span class="ml-result-label">R² (dokładność modelu):</span>
+                                <span class="ml-result-value" id="ml-r2">-</span>
+                            </div>
+                            <div class="ml-result-item">
+                                <span class="ml-result-label">Prognozowana aktywność:</span>
+                                <span class="ml-result-value" id="ml-prediction">-</span>
+                            </div>
+                            <div class="ml-result-item">
+                                <span class="ml-result-label">Pewność predykcji:</span>
+                                <span class="ml-result-value" id="ml-confidence">-</span>
+                            </div>
+                        </div>
+                        
+                        <div id="ml-status" class="ml-status"></div>
+                        
+                        <div class="ml-chart-container">
+                            <canvas id="mlChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="forecast-tab" class="tab-content">
+                    <h3>Przewidywana aktywność na następne 24 godziny</h3>
+                    <canvas id="forecastChart"></canvas>
+                    <table class="forecast-table">
+                        <thead>
+                            <tr>
+                                <th>Okres</th>
+                                <th>Godziny</th>
+                                <th>Aktywność</th>
+                                <th>Ocena</th>
+                            </tr>
+                        </thead>
+                        <tbody id="forecast-tbody">
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="history-tab" class="tab-content">
+                    <div class="catch-history">
+                        <h3>Historia twoich połowów</h3>
+                        <div id="catch-records">
+                            <div class="no-catches">Brak zapisanych połowów</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful');
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed:', error);
+                    });
+            });
+        }
+
+        const apiKey = "14623751126b313093d847fcc9fee1b7";
+        let pressureChartInstance = null;
+        let forecastChartInstance = null;
+        let mlChartInstance = null;
+        let currentWeatherData = null;
+        let currentForecastData = null;
+        let currentActivityData = null;
+        let currentLatitude = null;
+        let currentLongitude = null;
+        let mlModel = null;
+
+        // Funkcja debounce do ograniczania liczby zapytań
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        const debouncedFetchData = debounce(fetchData, 500);
+
+        // Funkcja do przełączania zakładek
+        function showTab(tabName) {
+            // Ukryj wszystkie zakładki
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Usuń klasę active ze wszystkich przycisków
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // Pokaż wybraną zakładkę
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            
+            // Dodaj klasę active do odpowiedniego przycisku
+            event.currentTarget.classList.add('active');
+            
+            // Jeśli wybrano historię, załaduj zapisane połowy
+            if (tabName === 'history') {
+                loadCatchHistory();
+            }
+            
+            // Jeśli wybrano uczenie maszynowe, zaktualizuj licznik danych
+            if (tabName === 'ml') {
+                updateMLDataCount();
+            }
+        }
+
+        // Funkcje do obsługi formularza połowu
+        function showCatchForm() {
+            document.getElementById('catch-form').classList.add('active');
+            // Ustaw gatunek z głównego formularza
+            document.getElementById('catch-species').value = document.getElementById('species').value;
+            // Zresetuj współrzędne GPS
+            document.getElementById('catch-latitude').value = '';
+            document.getElementById('catch-longitude').value = '';
+            document.getElementById('gps-status').textContent = 'Kliknij "Pobierz lokalizację GPS" aby dodać współrzędne';
+            currentLatitude = null;
+            currentLongitude = null;
+        }
+
+        function hideCatchForm() {
+            document.getElementById('catch-form').classList.remove('active');
+            // Wyczyść formularz
+            document.getElementById('catch-weight').value = '';
+            document.getElementById('catch-length').value = '';
+            document.getElementById('catch-bait').value = '';
+            document.getElementById('catch-notes').value = '';
+            document.getElementById('catch-latitude').value = '';
+            document.getElementById('catch-longitude').value = '';
+            currentLatitude = null;
+            currentLongitude = null;
+        }
+
+        // Funkcja do sprawdzania uprawnień lokalizacji
+        function checkLocationPermission() {
+            const statusElement = document.getElementById('gps-status');
+            
+            if (!navigator.geolocation) {
+                statusElement.textContent = 'Geolokalizacja nie jest wspierana przez tę przeglądarkę';
+                statusElement.style.color = '#dc3545';
+                return false;
+            }
+
+            // Sprawdź uprawnienia dla nowszych przeglądarek
+            if (navigator.permissions) {
+                navigator.permissions.query({name: 'geolocation'}).then(result => {
+                    if (result.state === 'granted') {
+                        getGPSLocation();
+                    } else if (result.state === 'prompt') {
+                        getGPSLocation();
+                    } else if (result.state === 'denied') {
+                        statusElement.textContent = 'Odmówiono dostępu do lokalizacji. Sprawdź ustawienia.';
+                        statusElement.style.color = '#dc3545';
+                    }
+                });
+            } else {
+                getGPSLocation();
+            }
+        }
+
+        // Funkcja do pobierania lokalizacji GPS
+        function getGPSLocation() {
+            const statusElement = document.getElementById('gps-status');
+            statusElement.textContent = 'Pobieranie lokalizacji...';
+            
+            if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        currentLatitude = position.coords.latitude;
+                        currentLongitude = position.coords.longitude;
+                        
+                        document.getElementById('catch-latitude').value = currentLatitude.toFixed(6);
+                        document.getElementById('catch-longitude').value = currentLongitude.toFixed(6);
+                        
+                        statusElement.textContent = 'Lokalizacja została pobrana pomyślnie';
+                        statusElement.style.color = '#28a745';
+                    },
+                    (error) => {
+                        let errorMessage = 'Nie udało się pobrać lokalizacji';
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage = "Użytkownik odmówił zgody na geolokalizację";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage = "Informacje o lokalizacji są niedostępne";
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage = "Przekroczono czas oczekiwania na lokalizację";
+                                break;
+                        }
+                        statusElement.textContent = errorMessage;
+                        statusElement.style.color = '#dc3545';
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 15000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                statusElement.textContent = 'Geolokalizacja nie jest wspierana przez tę przeglądarkę';
+                statusElement.style.color = '#dc3545';
+            }
+        }
+
+        // Funkcja do otwierania lokalizacji w Mapach Google
+        function viewLocationOnMap() {
+            const latitude = document.getElementById('catch-latitude').value;
+            const longitude = document.getElementById('catch-longitude').value;
+            
+            if (latitude && longitude) {
+                const googleMapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                window.open(googleMapsUrl, '_blank');
+            } else {
+                alert('Najpierw pobierz lokalizację GPS');
+            }
+        }
+
+        function saveCatch() {
+            const species = document.getElementById('catch-species').value;
+            const weight = document.getElementById('catch-weight').value;
+            const length = document.getElementById('catch-length').value;
+            const bait = document.getElementById('catch-bait').value;
+            const notes = document.getElementById('catch-notes').value;
+            
+            // Walidacja podstawowych danych
+            if (!species || !weight || !length) {
+                alert('Proszę uzupełnić gatunek, wagę i długość ryby.');
+                return;
+            }
+            
+            // Walidacja wartości liczbowych
+            if (parseFloat(weight) <= 0 || parseFloat(length) <= 0) {
+                alert('Waga i długość muszą być wartościami dodatnimi.');
+                return;
+            }
+            
+            // Przygotuj obiekt z danymi połowu
+            const catchData = {
+                id: Date.now(),
+                date: new Date().toISOString(),
+                city: document.getElementById('city').value,
+                species: species,
+                weight: parseFloat(weight),
+                length: parseInt(length),
+                bait: bait,
+                notes: notes,
+                latitude: currentLatitude,
+                longitude: currentLongitude,
+                weather: {
+                    temperature: currentWeatherData.main.temp,
+                    pressure: currentWeatherData.main.pressure,
+                    humidity: currentWeatherData.main.humidity,
+                    windSpeed: currentWeatherData.wind.speed,
+                    windDirection: currentWeatherData.wind.deg,
+                    description: currentWeatherData.weather[0].description
+                }
+            };
+            
+            // Pobierz istniejące połowy z localStorage
+            let catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+            
+            // Dodaj nowy połów
+            catches.push(catchData);
+            
+            // Zapisz zaktualizowaną listę
+            try {
+                localStorage.setItem('fishCatches', JSON.stringify(catches));
+            } catch (e) {
+                console.error('Błąd zapisu do localStorage:', e);
+                alert('Nie udało się zapisać danych. Pamięć przeglądarki może być pełna.');
+                return;
+            }
+            
+            // Ukryj formularz i pokaż komunikat
+            hideCatchForm();
+            alert('Połów został zapisany pomyślnie!');
+            
+            // Przejdź do zakładki historii
+            document.querySelector('[onclick="showTab(\'history\')"]').click();
+        }
+
+        function loadCatchHistory() {
+            const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+            const container = document.getElementById('catch-records');
+            
+            if (catches.length === 0) {
+                container.innerHTML = '<div class="no-catches">Brak zapisanych połowów</div>';
+                return;
+            }
+            
+            // Posortuj połowy od najnowszych
+            catches.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            container.innerHTML = '';
+            
+            catches.forEach(catchItem => {
+                const date = new Date(catchItem.date);
+                const formattedDate = date.toLocaleDateString('pl-PL') + ' ' + date.toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit'});
+                
+                let locationHtml = '';
+                if (catchItem.latitude && catchItem.longitude) {
+                    locationHtml = `
+                        <div class="catch-record-location">
+                            <strong>Lokalizacja:</strong> 
+                            <a href="https://www.google.com/maps?q=${catchItem.latitude},${catchItem.longitude}" 
+                               target="_blank" class="location-link">
+                                ${catchItem.latitude.toFixed(6)}, ${catchItem.longitude.toFixed(6)}
+                            </a>
+                        </div>
+                    `;
+                }
+                
+                const recordHtml = `
+                    <div class="catch-record" data-id="${catchItem.id}">
+                        <div class="catch-record-header">
+                            <div class="catch-record-date">${formattedDate}</div>
+                            <button class="delete-catch-btn" data-id="${catchItem.id}">Usuń</button>
+                        </div>
+                        <div class="catch-record-details">
+                            <div class="catch-record-detail"><strong>Gatunek:</strong> ${catchItem.species}</div>
+                            <div class="catch-record-detail"><strong>Waga:</strong> ${catchItem.weight} kg</div>
+                            <div class="catch-record-detail"><strong>Długość:</strong> ${catchItem.length} cm</div>
+                            <div class="catch-record-detail"><strong>Przynęta:</strong> ${catchItem.bait || 'nie podano'}</div>
+                        </div>
+                        ${locationHtml}
+                        <div class="catch-record-weather">
+                            <strong>Warunki pogodowe:</strong> 
+                            Temp: ${catchItem.weather.temperature.toFixed(1)}°C, 
+                            ${catchItem.weather.description}, 
+                            Wiatr: ${catchItem.weather.windSpeed.toFixed(1)} m/s (kierunek: ${getWindDirectionName(catchItem.weather.windDirection)}), 
+                            Ciśnienie: ${catchItem.weather.pressure} hPa, 
+                            Wilgotność: ${catchItem.weather.humidity}%
+                        </div>
+                        ${catchItem.notes ? `<div class="catch-record-notes"><strong>Uwagi:</strong> ${catchItem.notes}</div>` : ''}
+                    </div>
+                `;
+                
+                container.innerHTML += recordHtml;
+            });
+            
+            // Dodaj event listenery do przycisków usuwania
+            document.querySelectorAll('.delete-catch-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const id = parseInt(this.getAttribute('data-id'));
+                    deleteCatch(id);
+                });
+            });
+        }
+
+        function deleteCatch(id) {
+            if (confirm('Czy na pewno chcesz usunąć ten zapis?')) {
+                // Pobierz istniejące połowy z localStorage
+                let catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+                
+                // Sprawdź czy połów o podanym ID istnieje
+                const catchToDelete = catches.find(catchItem => catchItem.id === id);
+                if (!catchToDelete) {
+                    alert('Nie znaleziono połowu o podanym identyfikatorze.');
+                    return;
+                }
+                
+                // Usuń połów
+                catches = catches.filter(catchItem => catchItem.id !== id);
+                
+                // Zapisz zaktualizowaną listę
+                try {
+                    localStorage.setItem('fishCatches', JSON.stringify(catches));
+                } catch (e) {
+                    console.error('Błąd zapisu do localStorage:', e);
+                    alert('Nie udało się usunąć danych.');
+                    return;
+                }
+                
+                // Odśwież listę połowów
+                loadCatchHistory();
+                
+                // Pokaż komunikat o sukcesie
+                alert('Połów został usunięty pomyślnie!');
+            }
+        }
+
+        // Funkcje uczenia maszynowego
+        function updateMLDataCount() {
+            const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+            document.getElementById('ml-data-count').textContent = catches.length;
+        }
+
+        function prepareMLData(feature) {
+            const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+            
+            if (catches.length < 5) {
+                return null;
+            }
+            
+            // Przygotuj dane dla wybranej cechy
+            const X = [];
+            const y = [];
+            
+            catches.forEach(catchItem => {
+                let featureValue = null;
+                
+                switch(feature) {
+                    case 'temperature':
+                        featureValue = catchItem.weather.temperature;
+                        break;
+                    case 'pressure':
+                        featureValue = catchItem.weather.pressure;
+                        break;
+                    case 'humidity':
+                        featureValue = catchItem.weather.humidity;
+                        break;
+                    case 'windSpeed':
+                        featureValue = catchItem.weather.windSpeed;
+                        break;
+                }
+                
+                if (featureValue !== null) {
+                    X.push(featureValue);
+                    // Użyj wagi jako target - im większa waga, tym lepsze warunki
+                    y.push(catchItem.weight);
+                }
+            });
+            
+            return { X, y };
+        }
+
+        function trainLinearRegression(X, y) {
+            const n = X.length;
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            
+            for (let i = 0; i < n; i++) {
+                sumX += X[i];
+                sumY += y[i];
+                sumXY += X[i] * y[i];
+                sumX2 += X[i] * X[i];
+            }
+            
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            
+            return { slope, intercept };
+        }
+
+        function trainPolynomialRegression(X, y, degree = 2) {
+            // Uproszczona implementacja regresji wielomianowej
+            const n = X.length;
+            const matrix = [];
+            const vector = [];
+            
+            // Tworzenie macierzy Vandermonde'a
+            for (let i = 0; i < n; i++) {
+                const row = [];
+                for (let j = 0; j <= degree; j++) {
+                    row.push(Math.pow(X[i], j));
+                }
+                matrix.push(row);
+                vector.push(y[i]);
+            }
+            
+            // Rozwiązywanie układu równań (uproszczone)
+            const coefficients = [];
+            for (let j = 0; j <= degree; j++) {
+                let sum = 0;
+                for (let i = 0; i < n; i++) {
+                    sum += vector[i] * matrix[i][j];
+                }
+                coefficients.push(sum / n);
+            }
+            
+            return { coefficients, degree };
+        }
+
+        function predictLinearRegression(model, x) {
+            return model.slope * x + model.intercept;
+        }
+
+        function predictPolynomialRegression(model, x) {
+            let y = 0;
+            for (let i = 0; i <= model.degree; i++) {
+                y += model.coefficients[i] * Math.pow(x, i);
+            }
+            return y;
+        }
+
+        function calculateR2(yTrue, yPred) {
+            const yMean = yTrue.reduce((a, b) => a + b, 0) / yTrue.length;
+            const ssTotal = yTrue.reduce((sum, y) => sum + Math.pow(y - yMean, 2), 0);
+            const ssResidual = yTrue.reduce((sum, y, i) => sum + Math.pow(y - yPred[i], 2), 0);
+            return 1 - (ssResidual / ssTotal);
+        }
+
+        function trainModel() {
+            const feature = document.getElementById('ml-feature').value;
+            const algorithm = document.getElementById('ml-algorithm').value;
+            const statusElement = document.getElementById('ml-status');
+            const resultsElement = document.getElementById('ml-results');
+            
+            statusElement.textContent = 'Przygotowywanie danych...';
+            
+            const data = prepareMLData(feature);
+            
+            if (!data) {
+                statusElement.textContent = 'Za mało danych do trenowania modelu. Potrzebujesz co najmniej 5 połowów.';
+                return;
+            }
+            
+            statusElement.textContent = 'Trenowanie modelu...';
+            
+            try {
+                let model;
+                let predictions;
+                
+                if (algorithm === 'linear') {
+                    model = trainLinearRegression(data.X, data.y);
+                    predictions = data.X.map(x => predictLinearRegression(model, x));
+                } else {
+                    model = trainPolynomialRegression(data.X, data.y);
+                    predictions = data.X.map(x => predictPolynomialRegression(model, x));
+                }
+                
+                const r2 = calculateR2(data.y, predictions);
+                
+                // Zapisz model
+                mlModel = {
+                    type: algorithm,
+                    feature: feature,
+                    model: model,
+                    r2: r2
+                };
+                
+                // Wyświetl wyniki
+                document.getElementById('ml-r2').textContent = r2.toFixed(3);
+                
+                // Prognozuj dla aktualnych warunków
+                if (currentWeatherData) {
+                    let currentValue;
+                    switch(feature) {
+                        case 'temperature':
+                            currentValue = currentWeatherData.main.temp;
+                            break;
+                        case 'pressure':
+                            currentValue = currentWeatherData.main.pressure;
+                            break;
+                        case 'humidity':
+                            currentValue = currentWeatherData.main.humidity;
+                            break;
+                        case 'windSpeed':
+                            currentValue = currentWeatherData.wind.speed;
+                            break;
+                    }
+                    
+                    let prediction;
+                    if (algorithm === 'linear') {
+                        prediction = predictLinearRegression(model, currentValue);
+                    } else {
+                        prediction = predictPolynomialRegression(model, currentValue);
+                    }
+                    
+                    // Normalizuj predykcję do skali 0-25
+                    const maxWeight = Math.max(...data.y);
+                    const normalizedPrediction = Math.min(25, Math.max(0, (prediction / maxWeight) * 25));
+                    
+                    document.getElementById('ml-prediction').textContent = normalizedPrediction.toFixed(1) + '/25';
+                    
+                    // Oblicz pewność predykcji
+                    const confidence = Math.min(100, Math.max(0, r2 * 100));
+                    document.getElementById('ml-confidence').textContent = confidence.toFixed(0) + '%';
+                }
+                
+                resultsElement.style.display = 'block';
+                statusElement.textContent = 'Model został wytrenowany pomyślnie!';
+                
+                // Wyświetl wykres
+                displayMLChart(data.X, data.y, predictions, feature);
+                
+            } catch (error) {
+                console.error('Błąd trenowania modelu:', error);
+                statusElement.textContent = 'Błąd podczas trenowania modelu: ' + error.message;
+            }
+        }
+
+        function predictWithModel() {
+            if (!mlModel) {
+                alert('Najpierw wytrenuj model!');
+                return;
+            }
+            
+            const statusElement = document.getElementById('ml-status');
+            const resultsElement = document.getElementById('ml-results');
+            
+            statusElement.textContent = 'Prognozowanie...';
+            
+            try {
+                let currentValue;
+                switch(mlModel.feature) {
+                    case 'temperature':
+                        currentValue = currentWeatherData.main.temp;
+                        break;
+                    case 'pressure':
+                        currentValue = currentWeatherData.main.pressure;
+                        break;
+                    case 'humidity':
+                        currentValue = currentWeatherData.main.humidity;
+                        break;
+                    case 'windSpeed':
+                        currentValue = currentWeatherData.wind.speed;
+                        break;
+                }
+                
+                let prediction;
+                if (mlModel.type === 'linear') {
+                    prediction = predictLinearRegression(mlModel.model, currentValue);
+                } else {
+                    prediction = predictPolynomialRegression(mlModel.model, currentValue);
+                }
+                
+                // Pobierz dane treningowe do normalizacji
+                const data = prepareMLData(mlModel.feature);
+                const maxWeight = Math.max(...data.y);
+                const normalizedPrediction = Math.min(25, Math.max(0, (prediction / maxWeight) * 25));
+                
+                document.getElementById('ml-prediction').textContent = normalizedPrediction.toFixed(1) + '/25';
+                
+                // Oblicz pewność predykcji
+                const confidence = Math.min(100, Math.max(0, mlModel.r2 * 100));
+                document.getElementById('ml-confidence').textContent = confidence.toFixed(0) + '%';
+                
+                resultsElement.style.display = 'block';
+                statusElement.textContent = 'Prognoza została wykonana pomyślnie!';
+                
+            } catch (error) {
+                console.error('Błąd prognozowania:', error);
+                statusElement.textContent = 'Błąd podczas prognozowania: ' + error.message;
+            }
+        }
+
+        function displayMLChart(X, y, predictions, featureName) {
+            const ctx = document.getElementById('mlChart').getContext('2d');
+            
+            // Przygotuj dane do wykresu
+            const chartData = X.map((x, i) => ({
+                x: x,
+                y: y[i],
+                prediction: predictions[i]
+            }));
+            
+            // Posortuj po x
+            chartData.sort((a, b) => a.x - b.x);
+            
+            const labels = chartData.map(d => d.x.toFixed(1));
+            const actualData = chartData.map(d => d.y);
+            const predictedData = chartData.map(d => d.prediction);
+            
+            if (mlChartInstance) {
+                mlChartInstance.destroy();
+                mlChartInstance = null;
+            }
+            
+            mlChartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Rzeczywiste połowy',
+                            data: chartData.map(d => ({ x: d.x, y: d.y })),
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                            pointRadius: 6
+                        },
+                        {
+                            label: 'Prognoza modelu',
+                            data: chartData.map(d => ({ x: d.x, y: d.prediction })),
+                            type: 'line',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            fill: false,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Zależność wagi ryby od ${getFeatureName(featureName)}`
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} kg`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: getFeatureName(featureName)
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Waga ryby (kg)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function getFeatureName(feature) {
+            const names = {
+                'temperature': 'Temperatury (°C)',
+                'pressure': 'Ciśnienia (hPa)',
+                'humidity': 'Wilgotności (%)',
+                'windSpeed': 'Prędkości wiatru (m/s)'
+            };
+            return names[feature] || feature;
+        }
+
+        async function fetchData() {
+            const city = document.getElementById('city').value.trim();
+            const species = document.getElementById('species').value;
+            if (!city) {
+                alert("Proszę wpisać nazwę miasta.");
+                return;
+            }
+
+            document.getElementById('loader').classList.add('active');
+            document.getElementById('results').style.display = 'none';
+
+            const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)},PL&appid=${apiKey}&units=metric&lang=pl`;
+            const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)},PL&appid=${apiKey}&units=metric&lang=pl`;
+
+            try {
+                const [currentResponse, forecastResponse] = await Promise.all([
+                    fetch(currentWeatherUrl),
+                    fetch(forecastUrl)
+                ]);
+
+                // Sprawdzanie statusu odpowiedzi
+                if (!currentResponse.ok) {
+                    if (currentResponse.status === 401) throw new Error("Nieprawidłowy klucz API.");
+                    if (currentResponse.status === 404) throw new Error("Nie znaleziono miasta.");
+                    if (currentResponse.status === 429) throw new Error("Przekroczono limit zapytań API.");
+                    throw new Error(`Błąd HTTP: ${currentResponse.status}`);
+                }
+                if (!forecastResponse.ok) {
+                    if (forecastResponse.status === 401) throw new Error("Nieprawidłowy klucz API.");
+                    if (forecastResponse.status === 404) throw new Error("Nie znaleziono miasta.");
+                    if (forecastResponse.status === 429) throw new Error("Przekroczono limit zapytań API.");
+                    throw new Error(`Błąd HTTP: ${forecastResponse.status}`);
+                }
+
+                const [currentWeather, forecast] = await Promise.all([
+                    currentResponse.json(),
+                    forecastResponse.json()
+                ]);
+
+                console.log('Dane pogodowe:', currentWeather); // Debugowanie
+                console.log('Prognoza:', forecast); // Debugowanie
+
+                if (currentWeather.cod !== 200) {
+                    throw new Error(currentWeather.message || 'Nie znaleziono miasta.');
+                }
+                if (!forecast || !forecast.list || forecast.list.length < 8) { // Potrzebujemy co najmniej 8 punktów (24 godziny)
+                    throw new Error('Brak wystarczających danych prognozy.');
+                }
+
+                // Zapisz dane pogodowe do zmiennych globalnych
+                currentWeatherData = currentWeather;
+                currentForecastData = forecast;
+
+                document.getElementById('loader').classList.remove('active');
+                document.getElementById('results').style.display = 'block';
+
+                displayCurrentWeather(currentWeather);
+                calculateActivity(species, currentWeather, forecast);
+                displayPressureChart(currentWeather, forecast);
+                displayWindChart(currentWeather);
+                calculate24HourForecast(species, currentWeather, forecast);
+                
+            } catch (error) {
+                document.getElementById('loader').classList.remove('active');
+                
+                // Obsługa błędów sieciowych
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    alert('Brak połączenia z internetem. Sprawdź swoje połączenie.');
+                } else {
+                    alert(`Błąd: ${error.message}`);
+                }
+                console.error('Błąd pobierania danych:', error);
+            }
+        }
+
+        function displayCurrentWeather(data) {
+            const weatherDiv = document.getElementById('current-weather');
+            weatherDiv.innerHTML = `
+                <h2>Aktualna pogoda w ${data.name}</h2>
+                <p style="text-align:center;">
+                    Temperatura: <strong>${data.main.temp.toFixed(1)}°C</strong> | 
+                    ${data.weather[0].description} | 
+                    Wiatr: ${data.wind.speed.toFixed(1)} m/s (kierunek: ${getWindDirectionName(data.wind.deg)}) | 
+                    Ciśnienie: ${data.main.pressure} hPa | 
+                    Wilgotność: ${data.main.humidity}%
+                </p>
+            `;
+        }
+
+        function getSeason(date = new Date()) {
+            const month = date.getMonth();
+            if (month >= 2 && month <= 4) return 'Wiosna';
+            if (month >= 5 && month <= 7) return 'Lato';
+            if (month >= 8 && month <= 10) return 'Jesień';
+            return 'Zima';
+        }
+
+        function getMonthName(date = new Date()) {
+            const months = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", 
+                            "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+            return months[date.getMonth()];
+        }
+
+        function getMoonPhase(year, month, day) {
+            let c = 0, e = 0, jd = 0, b = 0;
+            if (month < 3) {
+                year--;
+                month += 12;
+            }
+            ++month;
+            c = 365.25 * year;
+            e = 30.6 * month;
+            jd = c + e + day - 694039.09;
+            jd /= 29.5305882;
+            b = Math.floor(jd);
+            jd -= b;
+            b = Math.round(jd * 8);
+            if (b >= 8) b = 0;
+            switch (b) {
+                case 0: return 'Nów';
+                case 1: return 'Przybywający sierp';
+                case 2: return 'Pierwsza kwadra';
+                case 3: return 'Przybywająca garbata';
+                case 4: return 'Pełnia';
+                case 5: return 'Ubywająca garbata';
+                case 6: return 'Ostatnia kwadra';
+                case 7: return 'Ubywający sierp';
+                default: return 'Błąd';
+            }
+        }
+
+        function calculateActivity(species, current, forecast) {
+            let score = 0;
+            const MAX_SCORE = 25;
+            let factors = [];
+
+            const now = new Date();
+            const season = getSeason(now);
+            const month = getMonthName(now);
+            const sunrise = new Date(current.sys.sunrise * 1000);
+            const sunset = new Date(current.sys.sunset * 1000);
+            const moonPhase = getMoonPhase(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+            // Przygotuj dane prognozy (24h)
+            const forecastData = forecast.list.slice(0, 8); // Pierwsze 8 punktów = 24 godziny
+
+            // 1. Pora dnia
+            const isSunrisePeriod = Math.abs(now - sunrise) < 2 * 60 * 60 * 1000;
+            const isSunsetPeriod = Math.abs(now - sunset) < 2 * 60 * 60 * 1000;
+            let timeBonus = 0;
+            let timeDesc = "Pora dnia";
+            if (species === 'szczupak') {
+                if (isSunrisePeriod || isSunsetPeriod) {
+                    timeBonus = 3;
+                    timeDesc = "Pora dnia (wschód/zachód słońca)";
+                    factors.push({ text: timeDesc, value: "+3", class: 'positive' });
+                } else {
+                    factors.push({ text: timeDesc, value: "0", class: 'neutral' });
+                }
+            } else if (species === 'sandacz') {
+                // Sandacz aktywuje się głównie nocą
+                if (now < sunrise || now > sunset) {
+                    timeBonus = 4;
+                    timeDesc = "Pora dnia (noc)";
+                    factors.push({ text: timeDesc, value: "+4", class: 'positive' });
+                } else {
+                    factors.push({ text: timeDesc, value: "0", class: 'neutral' });
+                }
+            } else { // okon
+                if (!isSunrisePeriod && !isSunsetPeriod && now > sunrise && now < sunset) {
+                    timeBonus = 3;
+                    timeDesc = "Pora dnia (dzień)";
+                    factors.push({ text: timeDesc, value: "+3", class: 'positive' });
+                } else {
+                    factors.push({ text: timeDesc, value: "0", class: 'neutral' });
+                }
+            }
+            score += timeBonus;
+
+            // 2. Temperatura
+            const temp = current.main.temp;
+            let tempBonus = 0;
+            let tempDesc = "Niekorzystna temperatura";
+            if (species === 'szczupak') {
+                if (season === 'Wiosna' && temp > 6 && temp < 14) { tempBonus = 3; tempDesc = "Dobra temperatura wiosenna"; }
+                else if (season === 'Lato' && temp > 15 && temp < 22) { tempBonus = 3; tempDesc = "Dobra temperatura letnia"; }
+                else if (season === 'Jesień' && temp > 8 && temp < 16) { tempBonus = 4; tempDesc = "Idealna temperatura jesienna"; }
+                else if (season === 'Zima' && temp > 0 && temp < 5) { tempBonus = 2; tempDesc = "Lekkie ocieplenie zimowe"; }
+            } else if (species === 'sandacz') {
+                if (season === 'Wiosna' && temp > 10 && temp < 16) { tempBonus = 4; tempDesc = "Idealna temperatura wiosenna"; }
+                else if (season === 'Lato' && temp > 18 && temp < 24) { tempBonus = 3; tempDesc = "Dobra temperatura letnia"; }
+                else if (season === 'Jesień' && temp > 12 && temp < 18) { tempBonus = 5; tempDesc = "Idealna temperatura jesienna"; }
+                else if (season === 'Zima' && temp > 4 && temp < 10) { tempBonus = 2; tempDesc = "Lekkie ocieplenie zimowe"; }
+            } else { // okon
+                if (season === 'Wiosna' && temp > 10 && temp < 18) { tempBonus = 3; tempDesc = "Dobra temperatura wiosenna"; }
+                else if (season === 'Lato' && temp > 18 && temp < 25) { tempBonus = 4; tempDesc = "Idealna temperatura letnia"; }
+                else if (season === 'Jesień' && temp > 12 && temp < 20) { tempBonus = 3; tempDesc = "Dobra temperatura jesienna"; }
+                else if (season === 'Zima' && temp > 4 && temp < 10) { tempBonus = 2; tempDesc = "Lekkie ocieplenie zimowe"; }
+            }
+            score += tempBonus;
+            factors.push({ text: tempDesc, value: `+${tempBonus}`, class: tempBonus > 0 ? 'positive' : 'negative' });
+
+            // 3. Analiza trendu ciśnienia (aktualne + prognoza 24h)
+            const currentPressure = current.main.pressure || 1013;
+            const forecastPressures = forecastData.map(item => item.main.pressure);
+            
+            // Oblicz prognozowaną zmianę ciśnienia w ciągu 24h
+            let totalChange = 0;
+            for (let i = 1; i < forecastPressures.length; i++) {
+                totalChange += forecastPressures[i] - forecastPressures[i-1];
+            }
+            const avgPressureChange = totalChange / (forecastPressures.length - 1);
+            
+            let pressureBonus = 0;
+            let pressureDesc = "Stabilne ciśnienie";
+            let pressureTrend = "trend-stable";
+            
+            // Analiza prognozowanej zmiany ciśnienia
+            if (avgPressureChange < -2) {
+                // Silny spadek ciśnienia
+                pressureBonus = 5;
+                pressureDesc = "Prognozowany silny spadek ciśnienia";
+                pressureTrend = "trend-down";
+            } else if (avgPressureChange < -0.5) {
+                // Umiarkowany spadek ciśnienia
+                pressureBonus = 3;
+                pressureDesc = "Prognozowany spadek ciśnienia";
+                pressureTrend = "trend-down";
+            } else if (Math.abs(avgPressureChange) <= 0.5) {
+                // Stabilne ciśnienie
+                pressureBonus = 2;
+                pressureDesc = "Stabilne ciśnienie";
+            } else {
+                // Wzrost ciśnienia
+                pressureBonus = -3;
+                pressureDesc = "Prognozowany wzrost ciśnienia";
+                pressureTrend = "trend-up";
+            }
+            
+            score += pressureBonus;
+            factors.push({ 
+                text: pressureDesc, 
+                value: `${pressureBonus > 0 ? '+':''}${pressureBonus}`, 
+                class: pressureBonus > 0 ? 'positive' : (pressureBonus < 0 ? 'negative' : 'neutral'),
+                trend: pressureTrend
+            });
+
+            // 4. Wiatr
+            const windSpeed = current.wind.speed;
+            const windDir = current.wind.deg;
+            let windBonus = 0;
+            let windDesc = "Wiatr";
+            if (windSpeed > 2.5 && windSpeed < 8) { windBonus += 3; windDesc = "Umiarkowany wiatr"; }
+            else if (windSpeed >= 1 && windSpeed <= 2.5) { windBonus += 2; windDesc = "Lekki wiatr"; }
+            else if (windSpeed > 8) { windBonus -= 2; windDesc = "Silny wiatr"; }
+            if (windDir > 135 && windDir < 315) { windBonus += 2; windDesc += " (korzystny kierunek)"; }
+            score += windBonus;
+            factors.push({ text: windDesc, value: `${windBonus > 0 ? '+':''}${windBonus}`, class: windBonus > 0 ? 'positive' : (windBonus < 0 ? 'negative' : 'neutral') });
+
+            // 5. Zachmurzenie i opady (aktualne + prognoza)
+            const clouds = current.clouds.all;
+            const weatherId = current.weather[0].id;
+            let coverBonus = 0;
+            let coverDesc = "Pogoda";
+            
+            // Sprawdź opady w ciągu najbliższych 24 godzin
+            let willRain = false;
+            for (let i = 0; i < forecastData.length; i++) {
+                const forecastWeatherId = forecastData[i].weather[0].id;
+                if (forecastWeatherId >= 300 && forecastWeatherId <= 531) {
+                    willRain = true;
+                    break;
+                }
+            }
+            
+            if (willRain) {
+                coverBonus = 4;
+                coverDesc = "Oczekiwane opady deszczu";
+                factors.push({ text: coverDesc, value: `+${coverBonus}`, class: 'positive' });
+            } else if (weatherId >= 300 && weatherId <= 531) {
+                coverBonus = 3;
+                coverDesc = "Aktualne opady deszczu";
+                factors.push({ text: coverDesc, value: `+${coverBonus}`, class: 'positive' });
+            } else if (clouds > 70) {
+                coverBonus = species === 'szczupak' ? 2 : 1;
+                coverDesc = "Duże zachmurzenie";
+                factors.push({ text: coverDesc, value: `+${coverBonus}`, class: coverBonus > 0 ? 'positive' : 'neutral' });
+            } else {
+                coverBonus = species === 'okon' ? 2 : 1;
+                coverDesc = "Słoneczna pogoda";
+                factors.push({ text: coverDesc, value: `+${coverBonus}`, class: coverBonus > 0 ? 'positive' : 'neutral' });
+            }
+            score += coverBonus;
+
+            // 6. Wilgotność
+            const humidity = current.main.humidity;
+            let humidityBonus = 0;
+            if (humidity > 80) { humidityBonus = 2; }
+            else if (humidity > 60) { humidityBonus = 1; }
+            score += humidityBonus;
+            factors.push({ text: "Wilgotność powietrza", value: `+${humidityBonus}`, class: humidityBonus > 0 ? 'positive' : 'neutral' });
+
+            // 7. Faza księżyca
+            let moonBonus = 0;
+            let moonDesc = `Faza księżyca: ${moonPhase}`;
+            if (moonPhase === 'Nów' || moonPhase === 'Pełnia') {
+                moonBonus = species === 'szczupak' ? 3 : 2;
+            } else if (moonPhase.includes('kwadra')) {
+                moonBonus = 2;
+            } else {
+                moonBonus = 1;
+            }
+            score += moonBonus;
+            factors.push({ text: moonDesc, value: `+${moonBonus}`, class: moonBonus > 0 ? 'positive' : 'neutral' });
+
+            // 8. Miesiąc i pora roku (dodatkowy czynnik)
+            let monthBonus = 0;
+            let monthDesc = `Miesiąc: ${month}`;
+            
+            if (species === 'sandacz') {
+                // Sandacz najbardziej aktywny w maju-czerwcu i wrześniu-październiku
+                if (month === 'Maj' || month === 'Czerwiec' || month === 'Wrzesień' || month === 'Październik') {
+                    monthBonus = 3;
+                } else if (month === 'Kwiecień' || month === 'Lipiec' || month === 'Sierpień' || month === 'Listopad') {
+                    monthBonus = 2;
+                } else {
+                    monthBonus = 1;
+                }
+            } else if (species === 'szczupak') {
+                // Szczupak najbardziej aktywny wiosną i jesienią
+                if (season === 'Wiosna' || season === 'Jesień') {
+                    monthBonus = 3;
+                } else if (season === 'Lato') {
+                    monthBonus = 2;
+                } else {
+                    monthBonus = 1;
+                }
+            } else { // okon
+                // Okon aktywny cały rok, ale najbardziej latem
+                if (season === 'Lato') {
+                    monthBonus = 3;
+                } else if (season === 'Wiosna' || season === 'Jesień') {
+                    monthBonus = 2;
+                } else {
+                    monthBonus = 1;
+                }
+            }
+            
+            score += monthBonus;
+            factors.push({ text: monthDesc, value: `+${monthBonus}`, class: monthBonus > 1 ? 'positive' : 'neutral' });
+
+            // Finalna ocena
+            score = Math.max(0, Math.min(MAX_SCORE, score));
+            const percentage = (score / MAX_SCORE) * 100;
+            let activityLevel = "", activityClass = "";
+            if (percentage >= 80) { activityLevel = "Doskonała"; activityClass = "excellent"; }
+            else if (percentage >= 60) { activityLevel = "Dobra"; activityClass = "good"; }
+            else if (percentage >= 40) { activityLevel = "Umiarkowana"; activityClass = "moderate"; }
+            else { activityLevel = "Słaba"; activityClass = "poor"; }
+
+            // Zapisz dane aktywności do zmiennej globalnej
+            currentActivityData = {
+                level: activityLevel,
+                score: score,
+                season: season,
+                month: month
+            };
+
+            document.getElementById('activity-score').innerHTML = `
+                <div class="activity-result ${activityClass}">
+                    Aktywność: ${activityLevel} (Ocena: ${score}/${MAX_SCORE})
+                </div>`;
+            
+            displayFactors(factors);
+            generateTip(factors, activityLevel, season, species, avgPressureChange, score);
+        }
+
+        function displayFactors(factors) {
+            const list = document.getElementById('factor-list');
+            list.innerHTML = '<ul>' + factors.map(f => {
+                let trendIndicator = '';
+                if (f.trend) {
+                    if (f.trend === 'trend-up') trendIndicator = '<span class="trend-indicator trend-up">↑</span>';
+                    else if (f.trend === 'trend-down') trendIndicator = '<span class="trend-indicator trend-down">↓</span>';
+                    else trendIndicator = '<span class="trend-indicator trend-stable">→</span>';
+                }
+                return `<li class="${f.class}"><span>${f.text}${trendIndicator}</span><strong>${f.value} pkt</strong></li>`;
+            }).join('') + '</ul>';
+        }
+
+        function generateTip(factors, level, season, species, pressureChange24h, score) {
+            let tip = "";
+            const pressureFactor = factors.find(f => f.text.includes('ciśnienia'));
+            const windFactor = factors.find(f => f.text.includes('wiatr'));
+            const speciesName = species === 'szczupak' ? 'szczupaka' : (species === 'sandacz' ? 'sandacza' : 'okonia');
+
+            if (level === 'Doskonała') {
+                tip = `Idealne warunki na żerowanie ${speciesName}! `;
+                if (pressureFactor && pressureFactor.text.includes('spadek')) tip += "Spadające ciśnienie aktywizuje ryby. ";
+                if (windFactor && windFactor.value > 0) tip += "Umiarkowany wiatr z korzystnego kierunku - obławiaj nawietrzne brzegi. ";
+                
+                if (species === 'szczupak') {
+                    tip += "Używaj większych przynęt dla agresywnych brań.";
+                } else if (species === 'sandacz') {
+                    tip += "Najlepsze wyniki przyniesie połów nocą, używaj przynęt z luminescencją.";
+                } else {
+                    tip += "Spróbuj małych woblerów lub gum w jasnych kolorach.";
+                }
+            } else if (level === 'Dobra') {
+                tip = `Dobre warunki na żerowanie ${speciesName}. `;
+                if (season === 'Lato' || season === 'Wiosna') tip += "Szukaj w roślinności wodnej i przy uskokach dna. ";
+                
+                if (species === 'szczupak') {
+                    tip += "Bądź cierpliwy i eksperymentuj z prowadzeniem przynęty.";
+                } else if (species === 'sandacz') {
+                    tip += "Skup się na głębszych partiach wody, używaj wolnego prowadzenia.";
+                } else {
+                    tip += "Używaj delikatnych przynęt i prowadź je blisko roślin.";
+                }
+            } else if (level === 'Umiarkowana') {
+                tip = `Przeciętne warunki dla ${speciesName}, ale możliwe brania. `;
+                if (season === 'Lato' || season === 'Wiosna') tip += "Szukaj w roślinności wodnej i przy uskokach dna. ";
+                
+                if (species === 'szczupak') {
+                    tip += "Bądź cierpliwy i eksperymentuj z prowadzeniem przynęty.";
+                } else if (species === 'sandacz') {
+                    tip += "Skup się na głębszych partiach wody, używaj wolnego prowadzenia.";
+                } else {
+                    tip += "Używaj delikatnych przynęt i prowadź je blisko roślin.";
+                }
+            } else {
+                tip = `Trudne warunki dla ${speciesName}. `;
+                
+                if (species === 'szczupak') {
+                    tip += "Ryby w kryjówkach: głębokie dołki, przeszkody. Używaj małych przynęt, prowadź wolno.";
+                } else if (species === 'sandacz') {
+                    tip += "Sandacz będzie bardzo ospały, szukaj go w najgłębszych miejscach. Używaj bardzo małych przynęt.";
+                } else {
+                    tip += "Szukaj okonia w głębszych partiach wody, używaj mikroprzynęt i prowadź je bardzo powoli.";
+                }
+                tip += " Obserwuj delikatne brania.";
+            }
+            
+            // Dodaj informacje o prognozie ciśnienia
+            if (Math.abs(pressureChange24h) > 0.5) {
+                tip += ` W ciągu najbliższych 24h ciśnienie średnio ${pressureChange24h < 0 ? 'spadnie' : 'wzrośnie'} o ${Math.abs(pressureChange24h).toFixed(1)} hPa/h.`;
+            }
+            
+            document.getElementById('fishing-tip').innerHTML = `<strong>Wskazówka wędkarska:</strong> ${tip}`;
+        }
+
+        function displayPressureChart(current, forecast) {
+            const ctx = document.getElementById('pressureChart').getContext('2d');
+            
+            // Przygotuj dane: aktualne ciśnienie + prognoza na 24 godziny
+            const forecastData = forecast.list.slice(0, 8); // Pierwsze 8 punktów = 24 godziny
+            const allData = [current, ...forecastData];
+            
+            const labels = allData.map((item, index) => {
+                const date = new Date(item.dt * 1000);
+                const hours = date.getHours();
+                const period = index === 0 ? "Teraz" : `+${index * 3}h`;
+                return `${hours}:00`;
+            });
+            
+            const data = allData.map(item => item.main.pressure);
+            
+            // Oznacz aktualny punkt
+            const pointColors = data.map((_, index) => 
+                index === 0 ? '#ff6384' : '#0a9396'
+            );
+            const pointRadius = data.map((_, index) => 
+                index === 0 ? 6 : 4
+            );
+
+            if (pressureChartInstance) {
+                pressureChartInstance.destroy();
+                pressureChartInstance = null;
+            }
+
+            pressureChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Ciśnienie (hPa)',
+                        data: data,
+                        borderColor: '#0a9396',
+                        backgroundColor: 'rgba(10, 147, 150, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: pointColors,
+                        pointBorderColor: pointColors,
+                        pointRadius: pointRadius,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    const index = context.dataIndex;
+                                    return index === 0 ? "Aktualne ciśnienie" : "Prognoza";
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            suggestedMin: Math.min(...data) - 2, 
+                            suggestedMax: Math.max(...data) + 2,
+                            title: {
+                                display: true,
+                                text: 'Ciśnienie (hPa)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Czas (aktualne + 24h prognozy)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function displayWindChart(current) {
+            const windSpeed = current.wind.speed;
+            const windDirection = current.wind.deg;
+            
+            // Zaktualizuj wartości wiatru w interfejsie
+            document.getElementById('wind-speed-value').textContent = windSpeed.toFixed(1);
+            document.getElementById('wind-direction-value').textContent = getWindDirectionName(windDirection);
+            
+            // Ustaw kierunek strzałki kompasu
+            const compassDirection = document.getElementById('compass-direction');
+            compassDirection.style.transform = `rotate(${windDirection}deg)`;
+        }
+
+        function getWindDirectionName(degrees) {
+            // Zmieniono na polskie nazwy kierunków
+            const directions = [
+                'Północ', 'Północny wschód', 'Północno-wschodni', 'Wschód północny', 
+                'Wschód', 'Wschód południowy', 'Południowy wschód', 'Południe wschodni',
+                'Południe', 'Południe zachodnie', 'Południowy zachód', 'Zachód południowy',
+                'Zachód', 'Zachód północny', 'Północny zachód', 'Północ zachodni'
+            ];
+            const index = Math.round((degrees % 360) / 22.5) % 16;
+            return directions[index];
+        }
+
+        function calculate24HourForecast(species, current, forecast) {
+            const season = getSeason();
+            const moonPhase = getMoonPhase(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+            const forecastData = forecast.list.slice(0, 8); // 24 godziny (8 punktów po 3 godziny)
+            
+            const forecastResults = [];
+            
+            for (let i = 0; i < forecastData.length; i++) {
+                const item = forecastData[i];
+                const date = new Date(item.dt * 1000);
+                const hours = date.getHours();
+                
+                // Oblicz aktywność dla tego okresu
+                let score = 0;
+                const MAX_SCORE = 25;
+                
+                // 1. Pora dnia
+                const sunrise = new Date(current.sys.sunrise * 1000);
+                const sunset = new Date(current.sys.sunset * 1000);
+                const isSunrisePeriod = Math.abs(date - sunrise) < 2 * 60 * 60 * 1000;
+                const isSunsetPeriod = Math.abs(date - sunset) < 2 * 60 * 60 * 1000;
+                
+                let timeBonus = 0;
+                if (species === 'szczupak') {
+                    if (isSunrisePeriod || isSunsetPeriod) {
+                        timeBonus = 3;
+                    }
+                } else if (species === 'sandacz') {
+                    // Sandacz aktywuje się głównie nocą
+                    if (date < sunrise || date > sunset) {
+                        timeBonus = 4;
+                    }
+                } else { // okon
+                    if (!isSunrisePeriod && !isSunsetPeriod && date > sunrise && date < sunset) {
+                        timeBonus = 3;
+                    }
+                }
+                score += timeBonus;
+                
+                // 2. Temperatura
+                const temp = item.main.temp;
+                let tempBonus = 0;
+                if (species === 'szczupak') {
+                    if (season === 'Wiosna' && temp > 6 && temp < 14) { tempBonus = 3; }
+                    else if (season === 'Lato' && temp > 15 && temp < 22) { tempBonus = 3; }
+                    else if (season === 'Jesień' && temp > 8 && temp < 16) { tempBonus = 4; }
+                    else if (season === 'Zima' && temp > 0 && temp < 5) { tempBonus = 2; }
+                } else if (species === 'sandacz') {
+                    if (season === 'Wiosna' && temp > 10 && temp < 16) { tempBonus = 4; }
+                    else if (season === 'Lato' && temp > 18 && temp < 24) { tempBonus = 3; }
+                    else if (season === 'Jesień' && temp > 12 && temp < 18) { tempBonus = 5; }
+                    else if (season === 'Zima' && temp > 4 && temp < 10) { tempBonus = 2; }
+                } else { // okon
+                    if (season === 'Wiosna' && temp > 10 && temp < 18) { tempBonus = 3; }
+                    else if (season === 'Lato' && temp > 18 && temp < 25) { tempBonus = 4; }
+                    else if (season === 'Jesień' && temp > 12 && temp < 20) { tempBonus = 3; }
+                    else if (season === 'Zima' && temp > 4 && temp < 10) { tempBonus = 2; }
+                }
+                score += tempBonus;
+                
+                // 3. Trend ciśnienia (porównaj z poprzednim punktem)
+                let pressureBonus = 0;
+                if (i > 0) {
+                    const prevPressure = forecastData[i-1].main.pressure;
+                    const currentPressure = item.main.pressure;
+                    const pressureDiff = currentPressure - prevPressure;
+                    
+                    if (pressureDiff < -1) {
+                        pressureBonus = 3;
+                    } else if (pressureDiff < -0.5) {
+                        pressureBonus = 2;
+                    } else if (Math.abs(pressureDiff) <= 0.5) {
+                        pressureBonus = 1;
+                    } else {
+                        pressureBonus = -2;
+                    }
+                } else {
+                    // Pierwszy punkt - porównaj z aktualnym ciśnieniem
+                    const currentPressure = current.main.pressure;
+                    const forecastPressure = item.main.pressure;
+                    const pressureDiff = forecastPressure - currentPressure;
+                    
+                    if (pressureDiff < -1) {
+                        pressureBonus = 3;
+                    } else if (pressureDiff < -0.5) {
+                        pressureBonus = 2;
+                    } else if (Math.abs(pressureDiff) <= 0.5) {
+                        pressureBonus = 1;
+                    } else {
+                        pressureBonus = -2;
+                    }
+                }
+                score += pressureBonus;
+                
+                // 4. Wiatr
+                const windSpeed = item.wind.speed;
+                const windDir = item.wind.deg;
+                let windBonus = 0;
+                if (windSpeed > 2.5 && windSpeed < 8) { windBonus += 3; }
+                else if (windSpeed >= 1 && windSpeed <= 2.5) { windBonus += 2; }
+                else if (windSpeed > 8) { windBonus -= 2; }
+                if (windDir > 135 && windDir < 315) { windBonus += 2; }
+                score += windBonus;
+                
+                // 5. Zachmurzenie i opady
+                const clouds = item.clouds.all;
+                const weatherId = item.weather[0].id;
+                let coverBonus = 0;
+                
+                if (weatherId >= 300 && weatherId <= 531) {
+                    coverBonus = 4;
+                } else if (clouds > 70) {
+                    coverBonus = species === 'szczupak' ? 2 : 1;
+                } else {
+                    coverBonus = species === 'okon' ? 2 : 1;
+                }
+                score += coverBonus;
+                
+                // 6. Wilgotność
+                const humidity = item.main.humidity;
+                let humidityBonus = 0;
+                if (humidity > 80) { humidityBonus = 2; }
+                else if (humidity > 60) { humidityBonus = 1; }
+                score += humidityBonus;
+                
+                // 7. Faza księżyca
+                let moonBonus = 0;
+                if (moonPhase === 'Nów' || moonPhase === 'Pełnia') {
+                    moonBonus = species === 'szczupak' ? 3 : 2;
+                } else if (moonPhase.includes('kwadra')) {
+                    moonBonus = 2;
+                } else {
+                    moonBonus = 1;
+                }
+                score += moonBonus;
+                
+                // 8. Miesiąc i pora roku
+                let monthBonus = 0;
+                const month = getMonthName(date);
+                
+                if (species === 'sandacz') {
+                    // Sandacz najbardziej aktywny w maju-czerwcu i wrześniu-październiku
+                    if (month === 'Maj' || month === 'Czerwiec' || month === 'Wrzesień' || month === 'Październik') {
+                        monthBonus = 3;
+                    } else if (month === 'Kwiecień' || month === 'Lipiec' || month === 'Sierpień' || month === 'Listopad') {
+                        monthBonus = 2;
+                    } else {
+                        monthBonus = 1;
+                    }
+                } else if (species === 'szczupak') {
+                    // Szczupak najbardziej aktywny wiosną i jesienią
+                    if (season === 'Wiosna' || season === 'Jesień') {
+                        monthBonus = 3;
+                    } else if (season === 'Lato') {
+                        monthBonus = 2;
+                    } else {
+                        monthBonus = 1;
+                    }
+                } else { // okon
+                    // Okon aktywny cały rok, ale najbardziej latem
+                    if (season === 'Lato') {
+                        monthBonus = 3;
+                    } else if (season === 'Wiosna' || season === 'Jesień') {
+                        monthBonus = 2;
+                    } else {
+                        monthBonus = 1;
+                    }
+                }
+                
+                score += monthBonus;
+                
+                // Finalna ocena
+                score = Math.max(0, Math.min(MAX_SCORE, score));
+                const percentage = (score / MAX_SCORE) * 100;
+                let activityLevel = "", activityClass = "";
+                if (percentage >= 80) { activityLevel = "Doskonała"; activityClass = "excellent"; }
+                else if (percentage >= 60) { activityLevel = "Dobra"; activityClass = "good"; }
+                else if (percentage >= 40) { activityLevel = "Umiarkowana"; activityClass = "moderate"; }
+                else { activityLevel = "Słaba"; activityClass = "poor"; }
+                
+                // Określ okres dnia
+                let periodOfDay = "";
+                if (hours >= 5 && hours < 8) periodOfDay = "Rano";
+                else if (hours >= 8 && hours < 12) periodOfDay = "Przedpołudnie";
+                else if (hours >= 12 && hours < 15) periodOfDay = "Południe";
+                else if (hours >= 15 && hours < 18) periodOfDay = "Popołudnie";
+                else if (hours >= 18 && hours < 21) periodOfDay = "Wieczór";
+                else periodOfDay = "Noc";
+                
+                forecastResults.push({
+                    time: `${hours}:00`,
+                    period: periodOfDay,
+                    score: score,
+                    level: activityLevel,
+                    class: activityClass
+                });
+            }
+            
+            // Wyświetl wykres i tabelę
+            displayForecastChart(forecastResults);
+            displayForecastTable(forecastResults);
+        }
+
+        function displayForecastChart(forecastResults) {
+            const ctx = document.getElementById('forecastChart').getContext('2d');
+            
+            const labels = forecastResults.map(item => item.time);
+            const data = forecastResults.map(item => item.score);
+            
+            // Kolory dla każdego poziomu aktywności
+            const backgroundColors = data.map(score => {
+                if (score >= 20) return 'rgba(40, 167, 69, 0.7)'; // excellent
+                if (score >= 15) return 'rgba(255, 193, 7, 0.7)'; // good
+                if (score >= 10) return 'rgba(108, 117, 125, 0.7)'; // moderate
+                return 'rgba(220, 53, 69, 0.7)'; // poor
+            });
+            
+            if (forecastChartInstance) {
+                forecastChartInstance.destroy();
+                forecastChartInstance = null;
+            }
+            
+            forecastChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Poziom aktywności',
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        borderColor: backgroundColors.map(color => color.replace('0.7', '1')),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const index = context.dataIndex;
+                                    const result = forecastResults[index];
+                                    return `Aktywność: ${result.level} (${result.score}/25)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 25,
+                            title: {
+                                display: true,
+                                text: 'Poziom aktywności'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Godzina'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function displayForecastTable(forecastResults) {
+            const tbody = document.getElementById('forecast-tbody');
+            tbody.innerHTML = '';
+            
+            forecastResults.forEach(result => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${result.period}</td>
+                    <td>${result.time}</td>
+                    <td><span class="activity-badge activity-${result.class}">${result.level}</span></td>
+                    <td>${result.score}/25</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+    </script>
+</body>
+</html>
