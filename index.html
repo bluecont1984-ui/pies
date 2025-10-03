@@ -627,7 +627,7 @@
         <h1>Zaawansowana Prognoza Aktywności Ryb Drapieżnych z Uczeniem Maszynowym</h1>
         <div id="input-section">
             <label for="city">Wpisz miejscowość:</label>
-            <input type="text" id="city" placeholder="Wpisz miejscowość, np. Mikołajki" value="Pomiechowo">
+            <input type="text" id="city" placeholder="Wpisz miejscowość, np. Mikołajki" value="Pomieczyno">
             <label for="species">Gatunek:</label>
             <select id="species">
                 <option value="szczupak">Szczupak</option>
@@ -979,15 +979,23 @@
             
             if ('geolocation' in navigator) {
                 navigator.geolocation.getCurrentPosition(
-                    (position) => {
+                    async (position) => {
                         currentLatitude = position.coords.latitude;
                         currentLongitude = position.coords.longitude;
                         
                         document.getElementById('catch-latitude').value = currentLatitude.toFixed(6);
                         document.getElementById('catch-longitude').value = currentLongitude.toFixed(6);
                         
-                        statusElement.textContent = 'Lokalizacja została pobrana pomyślnie';
-                        statusElement.style.color = '#28a745';
+                        // Pobierz nazwę lokalizacji
+                        statusElement.textContent = 'Pobieranie nazwy lokalizacji...';
+                        try {
+                            const locationName = await getLocationName(currentLatitude, currentLongitude);
+                            statusElement.innerHTML = `Lokalizacja została pobrana pomyślnie<br><small>${locationName}</small>`;
+                            statusElement.style.color = '#28a745';
+                        } catch (error) {
+                            statusElement.textContent = 'Lokalizacja została pobrana pomyślnie';
+                            statusElement.style.color = '#28a745';
+                        }
                     },
                     (error) => {
                         let errorMessage = 'Nie udało się pobrać lokalizacji';
@@ -1017,6 +1025,38 @@
             }
         }
 
+        // Funkcja do pobierania nazwy lokalizacji ze współrzędnych
+        async function getLocationName(latitude, longitude) {
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=pl`);
+                const data = await response.json();
+                
+                if (data && data.address) {
+                    const address = data.address;
+                    let locationName = '';
+                    
+                    if (address.village || address.town || address.city) {
+                        locationName = address.village || address.town || address.city;
+                    }
+                    
+                    if (address.suburb) {
+                        locationName += `, ${address.suburb}`;
+                    }
+                    
+                    if (address.county) {
+                        locationName += `, ${address.county.replace(' County', '').replace(' powiat', '')}`;
+                    }
+                    
+                    return locationName || 'Nieznana lokalizacja';
+                }
+                
+                return 'Nieznana lokalizacja';
+            } catch (error) {
+                console.error('Błąd pobierania nazwy lokalizacji:', error);
+                return 'Nieznana lokalizacja';
+            }
+        }
+
         // Funkcja do otwierania lokalizacji w Mapach Google
         function viewLocationOnMap() {
             const latitude = document.getElementById('catch-latitude').value;
@@ -1030,7 +1070,7 @@
             }
         }
 
-        function saveCatch() {
+        async function saveCatch() {
             const species = document.getElementById('catch-species').value;
             const weight = document.getElementById('catch-weight').value;
             const length = document.getElementById('catch-length').value;
@@ -1049,6 +1089,16 @@
                 return;
             }
             
+            // Pobierz nazwę lokalizacji jeśli mamy współrzędne
+            let locationName = '';
+            if (currentLatitude && currentLongitude) {
+                try {
+                    locationName = await getLocationName(currentLatitude, currentLongitude);
+                } catch (error) {
+                    console.error('Błąd pobierania nazwy lokalizacji:', error);
+                }
+            }
+            
             // Przygotuj obiekt z danymi połowu
             const catchData = {
                 id: Date.now(),
@@ -1061,6 +1111,7 @@
                 notes: notes,
                 latitude: currentLatitude,
                 longitude: currentLongitude,
+                locationName: locationName,
                 weather: {
                     temperature: currentWeatherData.main.temp,
                     pressure: currentWeatherData.main.pressure,
@@ -1114,12 +1165,13 @@
                 
                 let locationHtml = '';
                 if (catchItem.latitude && catchItem.longitude) {
+                    const locationText = catchItem.locationName || `${catchItem.latitude.toFixed(6)}, ${catchItem.longitude.toFixed(6)}`;
                     locationHtml = `
                         <div class="catch-record-location">
                             <strong>Lokalizacja:</strong> 
                             <a href="https://www.google.com/maps?q=${catchItem.latitude},${catchItem.longitude}" 
                                target="_blank" class="location-link">
-                                ${catchItem.latitude.toFixed(6)}, ${catchItem.longitude.toFixed(6)}
+                                ${locationText}
                             </a>
                         </div>
                     `;
@@ -1684,6 +1736,25 @@
             // Przygotuj dane prognozy (24h)
             const forecastData = forecast.list.slice(0, 8); // Pierwsze 8 punktów = 24 godziny
 
+            // Oblicz zmiany parametrów na 24h
+            const currentPressure = current.main.pressure || 1013;
+            const currentTemp = current.main.temp;
+            const currentWind = current.wind.speed;
+            
+            let totalPressureChange = 0;
+            let totalTempChange = 0;
+            let totalWindChange = 0;
+            
+            for (let i = 1; i < forecastData.length; i++) {
+                totalPressureChange += forecastData[i].main.pressure - forecastData[i-1].main.pressure;
+                totalTempChange += forecastData[i].main.temp - forecastData[i-1].main.temp;
+                totalWindChange += forecastData[i].wind.speed - forecastData[i-1].wind.speed;
+            }
+            
+            const avgPressureChange = totalPressureChange / (forecastData.length - 1);
+            const avgTempChange = totalTempChange / (forecastData.length - 1);
+            const avgWindChange = totalWindChange / (forecastData.length - 1);
+
             // 1. Pora dnia
             const isSunrisePeriod = Math.abs(now - sunrise) < 2 * 60 * 60 * 1000;
             const isSunsetPeriod = Math.abs(now - sunset) < 2 * 60 * 60 * 1000;
@@ -1720,7 +1791,7 @@
             // 2. Temperatura
             const temp = current.main.temp;
             let tempBonus = 0;
-            let tempDesc = "Niekorzystna temperatura";
+            let tempDesc = "Temperatura";
             if (species === 'szczupak') {
                 if (season === 'Wiosna' && temp > 6 && temp < 14) { tempBonus = 3; tempDesc = "Dobra temperatura wiosenna"; }
                 else if (season === 'Lato' && temp > 15 && temp < 22) { tempBonus = 3; tempDesc = "Dobra temperatura letnia"; }
@@ -1737,43 +1808,39 @@
                 else if (season === 'Jesień' && temp > 12 && temp < 20) { tempBonus = 3; tempDesc = "Dobra temperatura jesienna"; }
                 else if (season === 'Zima' && temp > 4 && temp < 10) { tempBonus = 2; tempDesc = "Lekkie ocieplenie zimowe"; }
             }
+            
+            // Dodaj informację o prognozie temperatury
+            if (Math.abs(avgTempChange) > 1) {
+                tempDesc += ` (prognoza: ${avgTempChange > 0 ? '+' : ''}${avgTempChange.toFixed(1)}°C/24h)`;
+            }
+            
             score += tempBonus;
             factors.push({ text: tempDesc, value: `+${tempBonus}`, class: tempBonus > 0 ? 'positive' : 'negative' });
 
             // 3. Analiza trendu ciśnienia (aktualne + prognoza 24h)
-            const currentPressure = current.main.pressure || 1013;
-            const forecastPressures = forecastData.map(item => item.main.pressure);
-            
-            // Oblicz prognozowaną zmianę ciśnienia w ciągu 24h
-            let totalChange = 0;
-            for (let i = 1; i < forecastPressures.length; i++) {
-                totalChange += forecastPressures[i] - forecastPressures[i-1];
-            }
-            const avgPressureChange = totalChange / (forecastPressures.length - 1);
-            
             let pressureBonus = 0;
-            let pressureDesc = "Stabilne ciśnienie";
+            let pressureDesc = "Ciśnienie";
             let pressureTrend = "trend-stable";
             
             // Analiza prognozowanej zmiany ciśnienia
             if (avgPressureChange < -2) {
                 // Silny spadek ciśnienia
                 pressureBonus = 5;
-                pressureDesc = "Prognozowany silny spadek ciśnienia";
+                pressureDesc = `Spadek ciśnienia (${avgPressureChange.toFixed(1)} hPa/24h)`;
                 pressureTrend = "trend-down";
             } else if (avgPressureChange < -0.5) {
                 // Umiarkowany spadek ciśnienia
                 pressureBonus = 3;
-                pressureDesc = "Prognozowany spadek ciśnienia";
+                pressureDesc = `Spadek ciśnienia (${avgPressureChange.toFixed(1)} hPa/24h)`;
                 pressureTrend = "trend-down";
             } else if (Math.abs(avgPressureChange) <= 0.5) {
                 // Stabilne ciśnienie
                 pressureBonus = 2;
-                pressureDesc = "Stabilne ciśnienie";
+                pressureDesc = `Stabilne ciśnienie (${avgPressureChange.toFixed(1)} hPa/24h)`;
             } else {
                 // Wzrost ciśnienia
                 pressureBonus = -3;
-                pressureDesc = "Prognozowany wzrost ciśnienia";
+                pressureDesc = `Wzrost ciśnienia (${avgPressureChange.toFixed(1)} hPa/24h)`;
                 pressureTrend = "trend-up";
             }
             
@@ -1794,6 +1861,12 @@
             else if (windSpeed >= 1 && windSpeed <= 2.5) { windBonus += 2; windDesc = "Lekki wiatr"; }
             else if (windSpeed > 8) { windBonus -= 2; windDesc = "Silny wiatr"; }
             if (windDir > 135 && windDir < 315) { windBonus += 2; windDesc += " (korzystny kierunek)"; }
+            
+            // Dodaj informację o prognozie wiatru
+            if (Math.abs(avgWindChange) > 2) {
+                windDesc += ` (prognoza: ${avgWindChange > 0 ? '+' : ''}${avgWindChange.toFixed(1)} m/s/24h)`;
+            }
+            
             score += windBonus;
             factors.push({ text: windDesc, value: `${windBonus > 0 ? '+':''}${windBonus}`, class: windBonus > 0 ? 'positive' : (windBonus < 0 ? 'negative' : 'neutral') });
 
@@ -1915,29 +1988,32 @@
             generateTip(factors, activityLevel, season, species, avgPressureChange, score);
         }
 
-        function displayFactors(factors) {
-            const list = document.getElementById('factor-list');
-            list.innerHTML = '<ul>' + factors.map(f => {
-                let trendIndicator = '';
-                if (f.trend) {
-                    if (f.trend === 'trend-up') trendIndicator = '<span class="trend-indicator trend-up">↑</span>';
-                    else if (f.trend === 'trend-down') trendIndicator = '<span class="trend-indicator trend-down">↓</span>';
-                    else trendIndicator = '<span class="trend-indicator trend-stable">→</span>';
-                }
-                return `<li class="${f.class}"><span>${f.text}${trendIndicator}</span><strong>${f.value} pkt</strong></li>`;
-            }).join('') + '</ul>';
-        }
-
         function generateTip(factors, level, season, species, pressureChange24h, score) {
             let tip = "";
             const pressureFactor = factors.find(f => f.text.includes('ciśnienia'));
             const windFactor = factors.find(f => f.text.includes('wiatr'));
+            const tempFactor = factors.find(f => f.text.includes('temperatura'));
             const speciesName = species === 'szczupak' ? 'szczupaka' : (species === 'sandacz' ? 'sandacza' : 'okonia');
 
             if (level === 'Doskonała') {
                 tip = `Idealne warunki na żerowanie ${speciesName}! `;
-                if (pressureFactor && pressureFactor.text.includes('spadek')) tip += "Spadające ciśnienie aktywizuje ryby. ";
-                if (windFactor && windFactor.value > 0) tip += "Umiarkowany wiatr z korzystnego kierunku - obławiaj nawietrzne brzegi. ";
+                
+                // Informacje o ciśnieniu
+                if (pressureFactor && pressureFactor.text.includes('spadek')) {
+                    tip += `Spadające ciśnienie (łącznie ${Math.abs(pressureChange24h).toFixed(1)} hPa w ciągu 24h) aktywizuje ryby. `;
+                } else if (pressureFactor && pressureFactor.text.includes('wzrost')) {
+                    tip += `Wzrost ciśnienia (łącznie ${pressureChange24h.toFixed(1)} hPa w ciągu 24h) może zmniejszyć aktywność. `;
+                }
+                
+                // Informacje o wietrze
+                if (windFactor && windFactor.value > 0) {
+                    tip += "Umiarkowany wiatr z korzystnego kierunku - obławiaj nawietrzne brzegi. ";
+                }
+                
+                // Informacje o temperaturze
+                if (tempFactor && tempFactor.value > 0) {
+                    tip += "Optymalna temperatura wody zwiększa aktywność drapieżników. ";
+                }
                 
                 if (species === 'szczupak') {
                     tip += "Używaj większych przynęt dla agresywnych brań.";
@@ -1948,6 +2024,14 @@
                 }
             } else if (level === 'Dobra') {
                 tip = `Dobre warunki na żerowanie ${speciesName}. `;
+                
+                // Informacje o ciśnieniu
+                if (pressureFactor && pressureFactor.text.includes('spadek')) {
+                    tip += `Spodziewany spadek ciśnienia (${Math.abs(pressureChange24h).toFixed(1)} hPa w ciągu 24h) może poprawić brania. `;
+                } else if (pressureFactor && pressureFactor.text.includes('wzrost')) {
+                    tip += `Wzrost ciśnienia (${pressureChange24h.toFixed(1)} hPa w ciągu 24h) może nieco pogorszyć warunki. `;
+                }
+                
                 if (season === 'Lato' || season === 'Wiosna') tip += "Szukaj w roślinności wodnej i przy uskokach dna. ";
                 
                 if (species === 'szczupak') {
@@ -1959,6 +2043,14 @@
                 }
             } else if (level === 'Umiarkowana') {
                 tip = `Przeciętne warunki dla ${speciesName}, ale możliwe brania. `;
+                
+                // Informacje o ciśnieniu
+                if (pressureFactor && pressureFactor.text.includes('spadek')) {
+                    tip += `Niewielki spadek ciśnienia (${Math.abs(pressureChange24h).toFixed(1)} hPa w ciągu 24h) może lekko poprawić sytuację. `;
+                } else if (pressureFactor && pressureFactor.text.includes('wzrost')) {
+                    tip += `Wzrost ciśnienia (${pressureChange24h.toFixed(1)} hPa w ciągu 24h) może nieco pogorszyć brania. `;
+                }
+                
                 if (season === 'Lato' || season === 'Wiosna') tip += "Szukaj w roślinności wodnej i przy uskokach dna. ";
                 
                 if (species === 'szczupak') {
@@ -1971,6 +2063,11 @@
             } else {
                 tip = `Trudne warunki dla ${speciesName}. `;
                 
+                // Informacje o ciśnieniu
+                if (pressureFactor && pressureFactor.text.includes('wzrost')) {
+                    tip += `Znaczny wzrost ciśnienia (${pressureChange24h.toFixed(1)} hPa w ciągu 24h) znacząco pogarsza warunki. `;
+                }
+                
                 if (species === 'szczupak') {
                     tip += "Ryby w kryjówkach: głębokie dołki, przeszkody. Używaj małych przynęt, prowadź wolno.";
                 } else if (species === 'sandacz') {
@@ -1981,12 +2078,25 @@
                 tip += " Obserwuj delikatne brania.";
             }
             
-            // Dodaj informacje o prognozie ciśnienia
-            if (Math.abs(pressureChange24h) > 0.5) {
-                tip += ` W ciągu najbliższych 24h ciśnienie średnio ${pressureChange24h < 0 ? 'spadnie' : 'wzrośnie'} o ${Math.abs(pressureChange24h).toFixed(1)} hPa/h.`;
+            // Dodaj informacje o prognozie ciśnienia jeśli nie zostały jeszcze dodane
+            if (!pressureFactor && Math.abs(pressureChange24h) > 0.5) {
+                tip += ` W ciągu najbliższych 24h ciśnienie średnio ${pressureChange24h < 0 ? 'spadnie' : 'wzrośnie'} o ${Math.abs(pressureChange24h).toFixed(1)} hPa.`;
             }
             
             document.getElementById('fishing-tip').innerHTML = `<strong>Wskazówka wędkarska:</strong> ${tip}`;
+        }
+
+        function displayFactors(factors) {
+            const list = document.getElementById('factor-list');
+            list.innerHTML = '<ul>' + factors.map(f => {
+                let trendIndicator = '';
+                if (f.trend) {
+                    if (f.trend === 'trend-up') trendIndicator = '<span class="trend-indicator trend-up">↑</span>';
+                    else if (f.trend === 'trend-down') trendIndicator = '<span class="trend-indicator trend-down">↓</span>';
+                    else trendIndicator = '<span class="trend-indicator trend-stable">→</span>';
+                }
+                return `<li class="${f.class}"><span>${f.text}${trendIndicator}</span><strong>${f.value} pkt</strong></li>`;
+            }).join('') + '</ul>';
         }
 
         function displayPressureChart(current, forecast) {
