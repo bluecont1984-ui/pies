@@ -1366,7 +1366,7 @@
             
             // Sprawdź, czy mamy wystarczająco danych po filtrowaniu
             if (features.length < 10) {
-                console.warn('Za mało kompletnych danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi.');
+                console.warn('Za mało kompletnych danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi pogodowymi.');
                 return null;
             }
             
@@ -1792,7 +1792,7 @@
                 const prediction = a * currentTemp + b;
                 const normalizedPrediction = Math.min(25, Math.max(0, prediction));
                 
-                // Przechowaj prosty model
+                // Przechowuj prosty model
                 mlModel = {
                     type: 'simple',
                     a: a,
@@ -1914,71 +1914,117 @@
         }
 
         function generateSampleData() {
-            const sampleCatches = [
-                {
-                    id: Date.now() + 1,
-                    date: new Date(Date.now() - 86400000).toISOString(), // 1 dzień temu
-                    city: "Pomieczyno",
-                    species: "szczupak",
-                    weight: 2.5,
-                    length: 65,
-                    bait: "wobbler",
-                    notes: "Przykładowy połów",
-                    latitude: 54.12345,
-                    longitude: 18.54321,
-                    locationName: "Pomieczyno",
-                    weather: {
-                        temperature: 15.2,
-                        pressure: 1013,
-                        humidity: 75,
-                        windSpeed: 3.2,
-                        windDirection: 180,
-                        description: "pochmurno"
-                    }
-                },
-                {
-                    id: Date.now() + 2,
-                    date: new Date(Date.now() - 172800000).toISOString(), // 2 dni temu
-                    city: "Pomieczyno",
-                    species: "szczupak",
-                    weight: 3.1,
-                    length: 72,
-                    bait: "gumka",
-                    notes: "Przykładowy połów 2",
-                    latitude: 54.12345,
-                    longitude: 18.54321,
-                    locationName: "Pomieczyno",
-                    weather: {
-                        temperature: 18.5,
-                        pressure: 1008,
-                        humidity: 80,
-                        windSpeed: 2.1,
-                        windDirection: 220,
-                        description: "lekki deszcz"
-                    }
-                },
-                {
-                    id: Date.now() + 3,
-                    date: new Date(Date.now() - 259200000).toISOString(), // 3 dni temu
-                    city: "Pomieczyno",
-                    species: "szczupak",
-                    weight: 1.8,
-                    length: 55,
-                    bait: "żyworąbka",
-                    notes: "Przykładowy połów 3",
-                    latitude: 54.12345,
-                    longitude: 18.54321,
-                    locationName: "Pomieczyno",
-                    weather: {
-                        temperature: 12.3,
-                        pressure: 1015,
-                        humidity: 70,
-                        windSpeed: 4.5,
-                        windDirection: 150,
-                        description: "słonecznie"
-                    }
-                }
-            ];
+            // Funkcja pomocnicza do generowania losowej liczby w zakresie
+            function randomBetween(min, max) {
+                return Math.random() * (max - min) + min;
+            }
+            
+            // Funkcja pomocnicza do generowania losowej daty w ostatnich 30 dniach
+            function randomDate() {
+                const end = new Date();
+                const start = new Date();
+                start.setDate(start.getDate() - 30);
+                return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+            }
+            
+            // Funkcja pomocnicza do generowania losowej lokalizacji w Polsce
+            function randomLocationInPoland() {
+                // Przybliżone granice Polski
+                const latMin = 49.0;
+                const latMax = 54.8;
+                const lonMin = 14.1;
+                const lonMax = 24.1;
+                
+                const lat = randomBetween(latMin, latMax);
+                const lon = randomBetween(lonMin, lonMax);
+                
+                return {
+                    latitude: lat,
+                    longitude: lon
+                };
+            }
+            
+            // Funkcja pomocnicza do generowania losowej nazwy miejscowości
+            function randomTownName() {
+                const towns = [
+                    "Warszawa", "Kraków", "Łódź", "Wrocław", "Poznań", "Gdańsk", "Szczecin", 
+                    "Bydgoszcz", "Lublin", "Białystok", "Katowice", "Kielce", "Olsztyn", 
+                    "Rzeszów", "Opole", "Gorzów Wielkopolski", "Zielona Góra", "Włocławek", 
+                    "Toruń", "Tarnów", "Koszalin", "Kalisz", "Legnica", "Grudziądz", "Elbląg"
+                ];
+                return towns[Math.floor(Math.random() * towns.length)];
+            }
+            
+            // Funkcja pomocnicza do generowania losowej pogody
+            function randomWeather() {
+                const weatherConditions = [
+                    { id: 800, description: "bezchmurnie" },
+                    { id: 801, description: "małe zachmurzenie" },
+                    { id: 802, description: "umiarkowane zachmurzenie" },
+                    { id: 803, description: "duże zachmurzenie" },
+                    { id: 804, description: "całkowite zachmurzenie" },
+                    { id: 300, description: "lekki deszcz" },
+                    { id: 500, description: "umiarkowany deszcz" },
+                    { id: 501, description: "deszcz" },
+                    { id: 520, description: "przelotne opady deszczu" }
+                ];
+                
+                const condition = weatherConditions[Math.floor(Math.random() * weatherConditions.length)];
+                
+                return {
+                    temperature: randomBetween(5, 30), // Temperatura w °C
+                    pressure: Math.round(randomBetween(990, 1030)), // Ciśnienie w hPa
+                    humidity: Math.round(randomBetween(40, 95)), // Wilgotność w %
+                    windSpeed: randomBetween(0, 15), // Prędkość wiatru w m/s
+                    windDirection: Math.round(randomBetween(0, 360)), // Kierunek wiatru w stopniach
+                    description: condition.description,
+                    id: condition.id
+                };
+            }
+            
+            // Funkcja pomocnicza do generowania losowej przynęty
+            function randomBait() {
+                const baits = [
+                    "wobbler", "gumka", "żyworąbka", "spinning", "jerkbait", "crankbait",
+                    "twister", "vibrator", "pilker", "kogut", "muchy", "robak", "kukurydza",
+                    "chleb", "ser", "pellets", "boilies", "spop", "method mix"
+                ];
+                return baits[Math.floor(Math.random() * baits.length)];
+            }
+            
+            // Generuj 5-10 losowych połowów
+            const sampleCatches = [];
+            const numCatches = Math.floor(randomBetween(5, 10));
+            
+            for (let i = 0; i < numCatches; i++) {
+                const date = randomDate();
+                const location = randomLocationInPoland();
+                const weather = randomWeather();
+                const town = randomTownName();
+                
+                // Losowy gatunek ryby
+                const speciesOptions = ["szczupak", "okon", "sandacz", "karp", "leszcz", "lin", "płoć", "okoń"];
+                const species = speciesOptions[Math.floor(Math.random() * speciesOptions.length)];
+                
+                // Losowe parametry połowu
+                const weight = randomBetween(0.5, 10); // Waga w kg
+                const length = randomBetween(20, 100); // Długość w cm
+                
+                sampleCatches.push({
+                    id: Date.now() + i + 1,
+                    date: date.toISOString(),
+                    city: town,
+                    species: species,
+                    weight: parseFloat(weight.toFixed(2)),
+                    length: Math.round(length),
+                    bait: randomBait(),
+                    notes: `Przykładowy połów ${i + 1}`,
+                    latitude: parseFloat(location.latitude.toFixed(6)),
+                    longitude: parseFloat(location.longitude.toFixed(6)),
+                    locationName: town,
+                    weather: weather
+                });
+            }
             
             // Pobierz istniejące połowy
             let catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
@@ -1989,10 +2035,15 @@
             // Zapisz zaktualizowaną listę
             try {
                 localStorage.setItem('fishCatches', JSON.stringify(catches));
-                alert('Dodano 3 przykładowe połowy do testowania modelu!');
+                alert(`Dodano ${numCatches} losowych połowów do testowania modelu!`);
                 
                 // Odśwież licznik danych
                 updateMLDataCount();
+                
+                // Jeśli jesteśmy w zakładce historii, odśwież widok
+                if (document.getElementById('history-tab').classList.contains('active')) {
+                    loadCatchHistory();
+                }
             } catch (e) {
                 console.error('Błąd zapisu do localStorage:', e);
                 alert('Nie udało się zapisać danych testowych.');
