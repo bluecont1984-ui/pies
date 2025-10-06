@@ -568,11 +568,13 @@
         }
         .ml-buttons {
             display: flex;
+            flex-wrap: wrap;
             gap: 10px;
         }
         .train-btn {
             background-color: #007bff;
             flex: 1;
+            min-width: 120px;
         }
         .train-btn:hover {
             background-color: #0069d9;
@@ -580,6 +582,7 @@
         .predict-btn {
             background-color: #28a745;
             flex: 1;
+            min-width: 120px;
         }
         .predict-btn:hover {
             background-color: #218838;
@@ -765,11 +768,11 @@
                 </div>
                 
                 <div id="ml-tab" class="tab-content">
-                    <h3>Analiza oparta na uczeniu maszynowym (wielowymiarowa)</h3>
+                    <h3>Analiza oparta na uczeniu maszynowym</h3>
                     
                     <div class="ml-data-count">
                         <p>Dostępnych danych treningowych: <strong id="ml-data-count">0</strong> połowów</p>
-                        <p>Model analizuje jednocześnie 8 parametrów: temperatura, ciśnienie, wilgotność, prędkość wiatru, kierunek wiatru, trend ciśnienia, pora roku, pora dnia</p>
+                        <p>Model analizuje jednocześnie 5 parametrów: temperatura, ciśnienie, wilgotność, pora roku, pora dnia</p>
                     </div>
                     
                     <div class="ml-section">
@@ -781,7 +784,10 @@
                                 <span id="ml-lambda-value">0.1</span>
                             </div>
                             <div class="ml-buttons">
-                                <button class="train-btn" onclick="trainModel()">Trenuj model</button>
+                                <button class="train-btn" onclick="trainModel()">Trenuj model pełny</button>
+                                <button class="train-btn" onclick="trainSimpleModel()">Trenuj model prosty</button>
+                                <button class="train-btn" onclick="trainVerySimpleModel()">Trenuj model bardzo prosty</button>
+                                <button class="train-btn" onclick="generateSampleData()">Dodaj dane testowe</button>
                                 <button class="predict-btn" onclick="predictWithModel()">Prognozuj</button>
                             </div>
                         </div>
@@ -1247,92 +1253,33 @@
             document.getElementById('ml-data-count').textContent = catches.length;
         }
 
-        function prepareMultiFeatureMLData() {
-            const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
-            
-            if (catches.length < 10) {
-                return null;
-            }
-            
-            const features = [];
-            const targets = [];
-            
-            catches.forEach(catchItem => {
-                // Sprawdź, czy catchItem.weather istnieje
-                if (!catchItem.weather) {
-                    console.warn('Brak danych pogodowych dla połowu:', catchItem);
-                    return; // Pomiń ten połów
-                }
-                
-                const weather = catchItem.weather;
-                const date = new Date(catchItem.date);
-                
-                // Ekstrakcja cech
-                const temp = weather.temperature;
-                const pressure = weather.pressure;
-                const humidity = weather.humidity;
-                const windSpeed = weather.windSpeed;
-                const windDirection = weather.windDirection; // POPRAWKA: zmienione z windDeg na windDirection
-                
-                // Obliczanie trendu ciśnienia (porównanie z prognozą)
-                const pressureTrend = calculatePressureTrendForCatch(catchItem);
-                
-                // Pora roku (0-3)
-                const month = date.getMonth();
-                const season = (month >= 2 && month <= 4) ? 1 : 
-                              (month >= 5 && month <= 7) ? 2 : 
-                              (month >= 8 && month <= 10) ? 3 : 0;
-                
-                // Pora dnia (0-3)
-                const hour = date.getHours();
-                const timeOfDay = (hour >= 5 && hour < 8) ? 0 : 
-                                 (hour >= 8 && hour < 16) ? 1 : 
-                                 (hour >= 16 && hour < 21) ? 2 : 3;
-                
-                if (temp !== undefined && pressure !== undefined && humidity !== undefined && 
-                    windSpeed !== undefined && windDirection !== undefined) {
-                    features.push([temp, pressure, humidity, windSpeed, windDirection, 
-                                  pressureTrend, season, timeOfDay]);
-                    targets.push(catchItem.weight);
-                }
-            });
-            
-            // Sprawdź, czy mamy wystarczająco danych po filtrowaniu
-            if (features.length < 10) {
-                console.warn('Za mało kompletnych danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi.');
-                return null;
-            }
-            
-            // Normalizacja danych
-            return normalizeFeatures(features, targets);
-        }
-
-        function calculatePressureTrendForCatch(catchItem) {
-            // Oblicz trend ciśnienia na podstawie prognozy
-            if (!currentForecastData) return 0;
-            
-            const catchTime = new Date(catchItem.date).getTime() / 1000;
-            const forecastPoints = currentForecastData.list.filter(point => 
-                Math.abs(point.dt - catchTime) < 7200 // W ciągu 2 godzin
-            );
-            
-            if (forecastPoints.length < 2) return 0;
-            
-            // Sortuj po czasie
-            forecastPoints.sort((a, b) => a.dt - b.dt);
-            
-            // Oblicz średnią zmianę ciśnienia
-            let totalChange = 0;
-            for (let i = 1; i < forecastPoints.length; i++) {
-                totalChange += forecastPoints[i].main.pressure - forecastPoints[i-1].main.pressure;
-            }
-            
-            return totalChange / (forecastPoints.length - 1);
-        }
-
         function normalizeFeatures(features, targets) {
+            console.log('normalizeFeatures - features:', features);
+            console.log('normalizeFeatures - targets:', targets);
+            
+            // Sprawdź, czy tablice nie są puste
+            if (!features || features.length === 0) {
+                throw new Error("Brak cech do normalizacji");
+            }
+            
+            if (!targets || targets.length === 0) {
+                throw new Error("Brak celów do normalizacji");
+            }
+            
+            if (features.length !== targets.length) {
+                throw new Error("Liczba cech nie zgadza się z liczbą celów");
+            }
+            
+            // Sprawdź, czy wszystkie cechy mają tę samą długość
+            const featureLength = features[0].length;
+            for (let i = 0; i < features.length; i++) {
+                if (!features[i] || features[i].length !== featureLength) {
+                    throw new Error(`Niezgodna długość cech w indeksie ${i}`);
+                }
+            }
+            
             const n = features.length;
-            const m = features[0].length;
+            const m = featureLength;
             
             // Oblicz średnie i odchylenia
             const means = Array(m).fill(0);
@@ -1355,15 +1302,106 @@
                 means: means,
                 stds: stds,
                 featureNames: [
-                    'Temperatura', 'Ciśnienie', 'Wilgotność', 'Prędkość wiatru', 
-                    'Kierunek wiatru', 'Trend ciśnienia', 'Pora roku', 'Pora dnia'
+                    'Temperatura', 'Ciśnienie', 'Wilgotność', 'Pora roku', 'Pora dnia'
                 ]
             };
         }
 
+        function prepareMultiFeatureMLData() {
+            const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+            
+            console.log('prepareMultiFeatureMLData - liczba połowów:', catches.length);
+            
+            if (catches.length < 10) {
+                console.log('Za mało połowów');
+                return null;
+            }
+            
+            const features = [];
+            const targets = [];
+            
+            catches.forEach((catchItem, index) => {
+                console.log(`Przetwarzanie połowu ${index}:`, catchItem);
+                
+                // Sprawdź, czy catchItem.weather istnieje
+                if (!catchItem.weather) {
+                    console.warn('Brak danych pogodowych dla połowu:', catchItem);
+                    return; // Pomiń ten połów
+                }
+                
+                const weather = catchItem.weather;
+                const date = new Date(catchItem.date);
+                
+                // Ekstrakcja cech
+                const temp = weather.temperature;
+                const pressure = weather.pressure;
+                const humidity = weather.humidity;
+                
+                console.log(`Dane pogodowe: temp=${temp}, pressure=${pressure}, humidity=${humidity}`);
+                
+                // Pora roku (0-3)
+                const month = date.getMonth();
+                const season = (month >= 2 && month <= 4) ? 1 : 
+                              (month >= 5 && month <= 7) ? 2 : 
+                              (month >= 8 && month <= 10) ? 3 : 0;
+                
+                // Pora dnia (0-3)
+                const hour = date.getHours();
+                const timeOfDay = (hour >= 5 && hour < 8) ? 0 : 
+                                 (hour >= 8 && hour < 16) ? 1 : 
+                                 (hour >= 16 && hour < 21) ? 2 : 3;
+                
+                // Sprawdź, czy wszystkie cechy są zdefiniowane
+                if (temp !== undefined && pressure !== undefined && humidity !== undefined) {
+                    const featureVector = [temp, pressure, humidity, season, timeOfDay];
+                    features.push(featureVector);
+                    targets.push(catchItem.weight);
+                    console.log(`Dodano cechy: ${featureVector}, waga: ${catchItem.weight}`);
+                } else {
+                    console.warn('Niekompletne dane pogodowe dla połowu:', catchItem);
+                }
+            });
+            
+            console.log('Liczba kompletnych połowów:', features.length);
+            
+            // Sprawdź, czy mamy wystarczająco danych po filtrowaniu
+            if (features.length < 10) {
+                console.warn('Za mało kompletnych danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi.');
+                return null;
+            }
+            
+            // Normalizacja danych
+            try {
+                const normalizedData = normalizeFeatures(features, targets);
+                console.log('Dane znormalizowane pomyślnie');
+                return normalizedData;
+            } catch (error) {
+                console.error('Błąd podczas normalizacji:', error);
+                return null;
+            }
+        }
+
         function trainRidgeRegression(features, targets, lambda = 0.1) {
+            console.log('trainRidgeRegression - features:', features);
+            console.log('trainRidgeRegression - targets:', targets);
+            
+            // Sprawdź, czy dane nie są puste
+            if (!features || features.length === 0) {
+                throw new Error("Cechy treningowe są puste");
+            }
+            
+            if (!targets || targets.length === 0) {
+                throw new Error("Cele treningowe są puste");
+            }
+            
+            if (features.length !== targets.length) {
+                throw new Error("Liczba cech nie zgadza się z liczbą celów");
+            }
+            
             const n = features.length;
             const m = features[0].length;
+            
+            console.log(`trainRidgeRegression - n=${n}, m=${m}`);
             
             // Dodaj kolumnę jedynek dla wyrazu wolnego
             const X = features.map(f => [1, ...f]);
@@ -1402,6 +1440,22 @@
         }
 
         function solveLinearSystem(A, b) {
+            console.log('solveLinearSystem - A:', A);
+            console.log('solveLinearSystem - b:', b);
+            
+            // Sprawdź, czy macierz i wektor nie są puste
+            if (!A || A.length === 0) {
+                throw new Error("Macierz jest pusta");
+            }
+            
+            if (!b || b.length === 0) {
+                throw new Error("Wektor jest pusty");
+            }
+            
+            if (A.length !== b.length) {
+                throw new Error("Wymiar macierzy nie zgadza się z wymiarem wektora");
+            }
+            
             const n = A.length;
             const augmented = A.map((row, i) => [...row, b[i]]);
             
@@ -1467,11 +1521,6 @@
             const temp = weatherData.main.temp;
             const pressure = weatherData.main.pressure;
             const humidity = weatherData.main.humidity;
-            const windSpeed = weatherData.wind.speed;
-            const windDirection = weatherData.wind.deg;
-            
-            // Trend ciśnienia
-            const pressureTrend = calculateCurrentPressureTrend();
             
             // Pora roku (0-3)
             const month = date.getMonth();
@@ -1485,21 +1534,7 @@
                              (hour >= 8 && hour < 16) ? 1 : 
                              (hour >= 16 && hour < 21) ? 2 : 3;
             
-            return [temp, pressure, humidity, windSpeed, windDirection, 
-                    pressureTrend, season, timeOfDay];
-        }
-
-        function calculateCurrentPressureTrend() {
-            if (!currentForecastData) return 0;
-            
-            const forecastPoints = currentForecastData.list.slice(0, 5); // 15 godzin
-            let totalChange = 0;
-            
-            for (let i = 1; i < forecastPoints.length; i++) {
-                totalChange += forecastPoints[i].main.pressure - forecastPoints[i-1].main.pressure;
-            }
-            
-            return totalChange / (forecastPoints.length - 1);
+            return [temp, pressure, humidity, season, timeOfDay];
         }
 
         function normalizeFeatureVector(featureVector, means, stds) {
@@ -1542,20 +1577,14 @@
                             'rgba(54, 162, 235, 0.7)',
                             'rgba(255, 206, 86, 0.7)',
                             'rgba(75, 192, 192, 0.7)',
-                            'rgba(153, 102, 255, 0.7)',
-                            'rgba(255, 159, 64, 0.7)',
-                            'rgba(199, 199, 199, 0.7)',
-                            'rgba(83, 102, 255, 0.7)'
+                            'rgba(153, 102, 255, 0.7)'
                         ],
                         borderColor: [
                             'rgba(255, 99, 132, 1)',
                             'rgba(54, 162, 235, 1)',
                             'rgba(255, 206, 86, 1)',
                             'rgba(75, 192, 192, 1)',
-                            'rgba(153, 102, 255, 1)',
-                            'rgba(255, 159, 64, 1)',
-                            'rgba(199, 199, 199, 1)',
-                            'rgba(83, 102, 255, 1)'
+                            'rgba(153, 102, 255, 1)'
                         ],
                         borderWidth: 1
                     }]
@@ -1599,7 +1628,11 @@
         }
 
         function trainModel() {
+            console.log('Rozpoczynam trenowanie modelu');
+            
             const data = prepareMultiFeatureMLData();
+            
+            console.log('Dane przygotowane:', data);
             
             if (!data) {
                 document.getElementById('ml-status').textContent = 
@@ -1611,6 +1644,13 @@
             if (!data.features || data.features.length < 10) {
                 document.getElementById('ml-status').textContent = 
                     'Za mało kompletnych danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi pogodowymi.';
+                return;
+            }
+            
+            // Sprawdź, czy data.targets nie jest puste i ma tę samą długość co features
+            if (!data.targets || data.targets.length !== data.features.length) {
+                document.getElementById('ml-status').textContent = 
+                    'Dane treningowe są niekompletne. Sprawdź zapisane połowy.';
                 return;
             }
             
@@ -1628,8 +1668,12 @@
                     throw new Error('Brak danych pogodowych. Proszę najpierw pobrać prognozę pogody.');
                 }
                 
+                console.log('Rozpoczynam trenowanie regresji Ridge');
+                
                 // Trenuj model regresji Ridge
                 const model = trainRidgeRegression(data.features, data.targets, lambda);
+                
+                console.log('Model wytrenowany:', model);
                 
                 // Oceń model na danych treningowych
                 const predictions = data.features.map(f => 
@@ -1637,8 +1681,12 @@
                 );
                 const r2 = calculateR2(data.targets, predictions);
                 
+                console.log('R²:', r2);
+                
                 // Oblicz maksymalną wagę z danych treningowych
                 const maxWeight = Math.max(...data.targets);
+                
+                console.log('Maksymalna waga:', maxWeight);
                 
                 // Przechowaj model z parametrami normalizacji i dodatkowymi danymi
                 mlModel = {
@@ -1647,17 +1695,24 @@
                     means: data.means,
                     stds: data.stds,
                     featureNames: data.featureNames,
-                    r2: r2, // POPRAWKA: zapisz R² w modelu
-                    maxWeight: maxWeight // POPRAWKA: zapisz maksymalną wagę
+                    r2: r2,
+                    maxWeight: maxWeight
                 };
+                
+                console.log('Model zapisany:', mlModel);
                 
                 // Wyświetl wyniki
                 document.getElementById('ml-r2').textContent = r2.toFixed(3);
                 
                 // Prognozuj dla aktualnych warunków
                 const currentFeatures = extractCurrentFeatures(currentWeatherData);
+                console.log('Aktualne cechy:', currentFeatures);
+                
                 const normalizedCurrent = normalizeFeatureVector(currentFeatures, data.means, data.stds);
+                console.log('Znormalizowane aktualne cechy:', normalizedCurrent);
+                
                 const prediction = predictRidgeRegression(model, normalizedCurrent);
+                console.log('Predykcja surowa:', prediction);
                 
                 // Normalizuj predykcję do skali 0-25
                 const normalizedPrediction = Math.min(25, Math.max(0, (prediction / maxWeight) * 25));
@@ -1680,6 +1735,270 @@
             }
         }
 
+        function trainSimpleModel() {
+            const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+            
+            if (catches.length < 5) {
+                document.getElementById('ml-status').textContent = 
+                    'Za mało danych do trenowania modelu. Potrzebujesz co najmniej 5 połowów.';
+                return;
+            }
+            
+            const statusElement = document.getElementById('ml-status');
+            const resultsElement = document.getElementById('ml-results');
+            
+            statusElement.textContent = 'Trenowanie uproszczonego modelu...';
+            
+            try {
+                // Przygotuj proste dane - tylko temperatura
+                const features = [];
+                const targets = [];
+                
+                catches.forEach(catchItem => {
+                    if (catchItem.weather && catchItem.weather.temperature !== undefined) {
+                        features.push([catchItem.weather.temperature]);
+                        targets.push(catchItem.weight);
+                    }
+                });
+                
+                if (features.length < 5) {
+                    throw new Error('Za mało kompletnych danych');
+                }
+                
+                // Oblicz prostą korelację
+                const tempAvg = features.reduce((sum, f) => sum + f[0], 0) / features.length;
+                const weightAvg = targets.reduce((sum, w) => sum + w, 0) / targets.length;
+                
+                let numerator = 0;
+                let tempDenominator = 0;
+                let weightDenominator = 0;
+                
+                for (let i = 0; i < features.length; i++) {
+                    const tempDiff = features[i][0] - tempAvg;
+                    const weightDiff = targets[i] - weightAvg;
+                    numerator += tempDiff * weightDiff;
+                    tempDenominator += tempDiff * tempDiff;
+                    weightDenominator += weightDiff * weightDiff;
+                }
+                
+                const correlation = numerator / Math.sqrt(tempDenominator * weightDenominator);
+                
+                // Prosty model liniowy: waga = a * temperatura + b
+                const a = correlation * (Math.sqrt(weightDenominator / features.length) / Math.sqrt(tempDenominator / features.length));
+                const b = weightAvg - a * tempAvg;
+                
+                // Prognozuj dla aktualnej temperatury
+                const currentTemp = currentWeatherData.main.temp;
+                const prediction = a * currentTemp + b;
+                const normalizedPrediction = Math.min(25, Math.max(0, prediction));
+                
+                // Przechowaj prosty model
+                mlModel = {
+                    type: 'simple',
+                    a: a,
+                    b: b,
+                    correlation: Math.abs(correlation)
+                };
+                
+                // Wyświetl wyniki
+                document.getElementById('ml-r2').textContent = (correlation * correlation).toFixed(3);
+                document.getElementById('ml-prediction').textContent = normalizedPrediction.toFixed(1) + '/25';
+                document.getElementById('ml-confidence').textContent = Math.round(Math.abs(correlation) * 100) + '%';
+                
+                resultsElement.style.display = 'block';
+                statusElement.textContent = 'Uproszczony model został wytrenowany pomyślnie!';
+                
+            } catch (error) {
+                console.error('Błąd trenowania modelu:', error);
+                statusElement.textContent = 'Błąd podczas trenowania: ' + error.message;
+            }
+        }
+
+        function trainVerySimpleModel() {
+            const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+            
+            if (catches.length < 3) {
+                document.getElementById('ml-status').textContent = 
+                    'Za mało danych do trenowania modelu. Potrzebujesz co najmniej 3 połowów.';
+                return;
+            }
+            
+            const statusElement = document.getElementById('ml-status');
+            const resultsElement = document.getElementById('ml-results');
+            
+            statusElement.textContent = 'Trenowanie bardzo prostego modelu...';
+            
+            try {
+                // Przygotuj dane - tylko temperatura
+                const temps = [];
+                const weights = [];
+                
+                catches.forEach(catchItem => {
+                    if (catchItem.weather && catchItem.weather.temperature !== undefined) {
+                        temps.push(catchItem.weather.temperature);
+                        weights.push(catchItem.weight);
+                    }
+                });
+                
+                if (temps.length < 3) {
+                    throw new Error('Za mało kompletnych danych');
+                }
+                
+                console.log('Dane do modelu:', temps, weights);
+                
+                // Oblicz średnią temperaturę i wagę
+                const avgTemp = temps.reduce((sum, temp) => sum + temp, 0) / temps.length;
+                const avgWeight = weights.reduce((sum, weight) => sum + weight, 0) / weights.length;
+                
+                // Oblicz korelację Pearsona
+                let numerator = 0;
+                let tempSumSq = 0;
+                let weightSumSq = 0;
+                
+                for (let i = 0; i < temps.length; i++) {
+                    const tempDiff = temps[i] - avgTemp;
+                    const weightDiff = weights[i] - avgWeight;
+                    numerator += tempDiff * weightDiff;
+                    tempSumSq += tempDiff * tempDiff;
+                    weightSumSq += weightDiff * weightDiff;
+                }
+                
+                const denominator = Math.sqrt(tempSumSq * weightSumSq);
+                const correlation = denominator > 0 ? numerator / denominator : 0;
+                
+                // Oblicz współczynniki regresji liniowej
+                const slope = denominator > 0 ? numerator / tempSumSq : 0;
+                const intercept = avgWeight - slope * avgTemp;
+                
+                console.log('Parametry modelu:', { slope, intercept, correlation });
+                
+                // Przechowuj prosty model
+                mlModel = {
+                    type: 'verySimple',
+                    slope: slope,
+                    intercept: intercept,
+                    correlation: Math.abs(correlation),
+                    avgWeight: avgWeight,
+                    avgTemp: avgTemp
+                };
+                
+                // Wyświetl wyniki
+                const r2 = correlation * correlation;
+                document.getElementById('ml-r2').textContent = r2.toFixed(3);
+                
+                // Prognozuj dla aktualnej temperatury
+                const currentTemp = currentWeatherData.main.temp;
+                console.log('Aktualna temperatura:', currentTemp);
+                
+                // Oblicz predykcję
+                let prediction = slope * currentTemp + intercept;
+                
+                // Jeśli predykcja jest nierealistyczna, użyj średniej wagi
+                if (prediction <= 0 || prediction > avgWeight * 3) {
+                    prediction = avgWeight;
+                }
+                
+                // Normalizuj predykcję do skali 0-25
+                const normalizedPrediction = Math.min(25, Math.max(0, prediction));
+                
+                document.getElementById('ml-prediction').textContent = normalizedPrediction.toFixed(1) + '/25';
+                document.getElementById('ml-confidence').textContent = Math.round(Math.abs(correlation) * 100) + '%';
+                
+                resultsElement.style.display = 'block';
+                statusElement.textContent = 'Bardzo prosty model został wytrenowany pomyślnie!';
+                
+            } catch (error) {
+                console.error('Błąd trenowania modelu:', error);
+                statusElement.textContent = 'Błąd podczas trenowania: ' + error.message;
+            }
+        }
+
+        function generateSampleData() {
+            const sampleCatches = [
+                {
+                    id: Date.now() + 1,
+                    date: new Date(Date.now() - 86400000).toISOString(), // 1 dzień temu
+                    city: "Pomieczyno",
+                    species: "szczupak",
+                    weight: 2.5,
+                    length: 65,
+                    bait: "wobbler",
+                    notes: "Przykładowy połów",
+                    latitude: 54.12345,
+                    longitude: 18.54321,
+                    locationName: "Pomieczyno",
+                    weather: {
+                        temperature: 15.2,
+                        pressure: 1013,
+                        humidity: 75,
+                        windSpeed: 3.2,
+                        windDirection: 180,
+                        description: "pochmurno"
+                    }
+                },
+                {
+                    id: Date.now() + 2,
+                    date: new Date(Date.now() - 172800000).toISOString(), // 2 dni temu
+                    city: "Pomieczyno",
+                    species: "szczupak",
+                    weight: 3.1,
+                    length: 72,
+                    bait: "gumka",
+                    notes: "Przykładowy połów 2",
+                    latitude: 54.12345,
+                    longitude: 18.54321,
+                    locationName: "Pomieczyno",
+                    weather: {
+                        temperature: 18.5,
+                        pressure: 1008,
+                        humidity: 80,
+                        windSpeed: 2.1,
+                        windDirection: 220,
+                        description: "lekki deszcz"
+                    }
+                },
+                {
+                    id: Date.now() + 3,
+                    date: new Date(Date.now() - 259200000).toISOString(), // 3 dni temu
+                    city: "Pomieczyno",
+                    species: "szczupak",
+                    weight: 1.8,
+                    length: 55,
+                    bait: "żyworąbka",
+                    notes: "Przykładowy połów 3",
+                    latitude: 54.12345,
+                    longitude: 18.54321,
+                    locationName: "Pomieczyno",
+                    weather: {
+                        temperature: 12.3,
+                        pressure: 1015,
+                        humidity: 70,
+                        windSpeed: 4.5,
+                        windDirection: 150,
+                        description: "słonecznie"
+                    }
+                }
+            ];
+            
+            // Pobierz istniejące połowy
+            let catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+            
+            // Dodaj przykładowe dane
+            catches.push(...sampleCatches);
+            
+            // Zapisz zaktualizowaną listę
+            try {
+                localStorage.setItem('fishCatches', JSON.stringify(catches));
+                alert('Dodano 3 przykładowe połowy do testowania modelu!');
+                
+                // Odśwież licznik danych
+                updateMLDataCount();
+            } catch (e) {
+                console.error('Błąd zapisu do localStorage:', e);
+                alert('Nie udało się zapisać danych testowych.');
+            }
+        }
+
         function predictWithModel() {
             if (!mlModel) {
                 alert('Najpierw wytrenuj model!');
@@ -1687,21 +2006,48 @@
             }
             
             const statusElement = document.getElementById('ml-status');
-            statusElement.textContent = 'Prognozowanie na podstawie modelu wielowymiarowego...';
+            statusElement.textContent = 'Prognozowanie na podstawie modelu...';
             
             try {
-                const currentFeatures = extractCurrentFeatures(currentWeatherData);
-                const normalizedCurrent = normalizeFeatureVector(currentFeatures, mlModel.means, mlModel.stds);
-                const prediction = predictRidgeRegression(mlModel.model, normalizedCurrent);
+                let prediction;
+                let confidence;
                 
-                // POPRAWKA: Użyj zapisanej maksymalnej wagi z modelu zamiast przeliczać
-                const maxWeight = mlModel.maxWeight;
-                const normalizedPrediction = Math.min(25, Math.max(0, (prediction / maxWeight) * 25));
+                if (mlModel.type === 'verySimple') {
+                    // Użyj bardzo prostego modelu
+                    const currentTemp = currentWeatherData.main.temp;
+                    console.log('Prognozowanie dla temperatury:', currentTemp);
+                    
+                    // Oblicz predykcję
+                    prediction = mlModel.slope * currentTemp + mlModel.intercept;
+                    
+                    // Jeśli predykcja jest nierealistyczna, użyj średniej wagi
+                    if (prediction <= 0 || prediction > mlModel.avgWeight * 3) {
+                        prediction = mlModel.avgWeight;
+                    }
+                    
+                    confidence = Math.min(100, Math.max(0, mlModel.correlation * 100));
+                    
+                    console.log('Predykcja:', prediction, 'Pewność:', confidence);
+                    
+                } else if (mlModel.type === 'simple') {
+                    // Użyj prostego modelu
+                    const currentTemp = currentWeatherData.main.temp;
+                    prediction = mlModel.a * currentTemp + mlModel.b;
+                    confidence = Math.min(100, Math.max(0, mlModel.correlation * 100));
+                } else {
+                    // Użyj pełnego modelu
+                    const currentFeatures = extractCurrentFeatures(currentWeatherData);
+                    const normalizedCurrent = normalizeFeatureVector(currentFeatures, mlModel.means, mlModel.stds);
+                    prediction = predictRidgeRegression(mlModel.model, normalizedCurrent);
+                    
+                    // Normalizuj predykcję
+                    const maxWeight = mlModel.maxWeight;
+                    prediction = (prediction / maxWeight) * 25;
+                    confidence = Math.min(100, Math.max(0, mlModel.r2 * 100));
+                }
                 
+                const normalizedPrediction = Math.min(25, Math.max(0, prediction));
                 document.getElementById('ml-prediction').textContent = normalizedPrediction.toFixed(1) + '/25';
-                
-                // POPRAWKA: Użyj zapisanego R² z modelu
-                const confidence = Math.min(100, Math.max(0, mlModel.r2 * 100));
                 document.getElementById('ml-confidence').textContent = confidence.toFixed(0) + '%';
                 
                 statusElement.textContent = 'Prognoza wykonana pomyślnie!';
