@@ -1258,6 +1258,12 @@
             const targets = [];
             
             catches.forEach(catchItem => {
+                // Sprawdź, czy catchItem.weather istnieje
+                if (!catchItem.weather) {
+                    console.warn('Brak danych pogodowych dla połowu:', catchItem);
+                    return; // Pomiń ten połów
+                }
+                
                 const weather = catchItem.weather;
                 const date = new Date(catchItem.date);
                 
@@ -1266,7 +1272,7 @@
                 const pressure = weather.pressure;
                 const humidity = weather.humidity;
                 const windSpeed = weather.windSpeed;
-                const windDirection = weather.windDirection;
+                const windDirection = weather.windDirection; // POPRAWKA: zmienione z windDeg na windDirection
                 
                 // Obliczanie trendu ciśnienia (porównanie z prognozą)
                 const pressureTrend = calculatePressureTrendForCatch(catchItem);
@@ -1290,6 +1296,12 @@
                     targets.push(catchItem.weight);
                 }
             });
+            
+            // Sprawdź, czy mamy wystarczająco danych po filtrowaniu
+            if (features.length < 10) {
+                console.warn('Za mało kompletnych danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi.');
+                return null;
+            }
             
             // Normalizacja danych
             return normalizeFeatures(features, targets);
@@ -1497,6 +1509,12 @@
         function displayFeatureImportances(model, featureNames) {
             const ctx = document.getElementById('mlChart').getContext('2d');
             
+            // Sprawdź, czy model i featureNames istnieją
+            if (!model || !featureNames || !Array.isArray(featureNames)) {
+                console.error('Nieprawidłowe dane do wyświetlenia ważności cech:', model, featureNames);
+                return;
+            }
+            
             // Oblicz ważność cech (współczynniki pomnożone przez odchylenie standardowe)
             const importances = model.coefficients.slice(1).map((coef, i) => 
                 Math.abs(coef * model.stds[i])
@@ -1585,7 +1603,14 @@
             
             if (!data) {
                 document.getElementById('ml-status').textContent = 
-                    'Za mało danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów.';
+                    'Za mało danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi pogodowymi.';
+                return;
+            }
+            
+            // Dodatkowe sprawdzenie czy mamy wystarczająco danych
+            if (!data.features || data.features.length < 10) {
+                document.getElementById('ml-status').textContent = 
+                    'Za mało kompletnych danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi pogodowymi.';
                 return;
             }
             
@@ -1598,17 +1623,13 @@
                 // Pobierz wartość lambda z suwaka
                 const lambda = parseFloat(document.getElementById('ml-lambda').value);
                 
+                // Sprawdź, czy currentWeatherData istnieje
+                if (!currentWeatherData) {
+                    throw new Error('Brak danych pogodowych. Proszę najpierw pobrać prognozę pogody.');
+                }
+                
                 // Trenuj model regresji Ridge
                 const model = trainRidgeRegression(data.features, data.targets, lambda);
-                
-                // Przechowaj model z parametrami normalizacji
-                mlModel = {
-                    type: 'ridge',
-                    model: model,
-                    means: data.means,
-                    stds: data.stds,
-                    featureNames: data.featureNames
-                };
                 
                 // Oceń model na danych treningowych
                 const predictions = data.features.map(f => 
@@ -1616,25 +1637,36 @@
                 );
                 const r2 = calculateR2(data.targets, predictions);
                 
+                // Oblicz maksymalną wagę z danych treningowych
+                const maxWeight = Math.max(...data.targets);
+                
+                // Przechowaj model z parametrami normalizacji i dodatkowymi danymi
+                mlModel = {
+                    type: 'ridge',
+                    model: model,
+                    means: data.means,
+                    stds: data.stds,
+                    featureNames: data.featureNames,
+                    r2: r2, // POPRAWKA: zapisz R² w modelu
+                    maxWeight: maxWeight // POPRAWKA: zapisz maksymalną wagę
+                };
+                
                 // Wyświetl wyniki
                 document.getElementById('ml-r2').textContent = r2.toFixed(3);
                 
                 // Prognozuj dla aktualnych warunków
-                if (currentWeatherData) {
-                    const currentFeatures = extractCurrentFeatures(currentWeatherData);
-                    const normalizedCurrent = normalizeFeatureVector(currentFeatures, data.means, data.stds);
-                    const prediction = predictRidgeRegression(model, normalizedCurrent);
-                    
-                    // Normalizuj predykcję do skali 0-25
-                    const maxWeight = Math.max(...data.targets);
-                    const normalizedPrediction = Math.min(25, Math.max(0, (prediction / maxWeight) * 25));
-                    
-                    document.getElementById('ml-prediction').textContent = normalizedPrediction.toFixed(1) + '/25';
-                    
-                    // Oblicz pewność predykcji
-                    const confidence = Math.min(100, Math.max(0, r2 * 100));
-                    document.getElementById('ml-confidence').textContent = confidence.toFixed(0) + '%';
-                }
+                const currentFeatures = extractCurrentFeatures(currentWeatherData);
+                const normalizedCurrent = normalizeFeatureVector(currentFeatures, data.means, data.stds);
+                const prediction = predictRidgeRegression(model, normalizedCurrent);
+                
+                // Normalizuj predykcję do skali 0-25
+                const normalizedPrediction = Math.min(25, Math.max(0, (prediction / maxWeight) * 25));
+                
+                document.getElementById('ml-prediction').textContent = normalizedPrediction.toFixed(1) + '/25';
+                
+                // Oblicz pewność predykcji
+                const confidence = Math.min(100, Math.max(0, r2 * 100));
+                document.getElementById('ml-confidence').textContent = confidence.toFixed(0) + '%';
                 
                 resultsElement.style.display = 'block';
                 statusElement.textContent = 'Model wielowymiarowy został wytrenowany pomyślnie!';
@@ -1662,15 +1694,13 @@
                 const normalizedCurrent = normalizeFeatureVector(currentFeatures, mlModel.means, mlModel.stds);
                 const prediction = predictRidgeRegression(mlModel.model, normalizedCurrent);
                 
-                // Pobierz dane treningowe do normalizacji
-                const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
-                const weights = catches.map(c => c.weight);
-                const maxWeight = Math.max(...weights);
+                // POPRAWKA: Użyj zapisanej maksymalnej wagi z modelu zamiast przeliczać
+                const maxWeight = mlModel.maxWeight;
                 const normalizedPrediction = Math.min(25, Math.max(0, (prediction / maxWeight) * 25));
                 
                 document.getElementById('ml-prediction').textContent = normalizedPrediction.toFixed(1) + '/25';
                 
-                // Oblicz pewność predykcji
+                // POPRAWKA: Użyj zapisanego R² z modelu
                 const confidence = Math.min(100, Math.max(0, mlModel.r2 * 100));
                 document.getElementById('ml-confidence').textContent = confidence.toFixed(0) + '%';
                 
