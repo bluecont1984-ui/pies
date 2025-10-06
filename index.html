@@ -772,7 +772,7 @@
                     
                     <div class="ml-data-count">
                         <p>Dostępnych danych treningowych: <strong id="ml-data-count">0</strong> połowów</p>
-                        <p>Model analizuje jednocześnie 5 parametrów: temperatura, ciśnienie, wilgotność, pora roku, pora dnia</p>
+                        <p>Model analizuje jednocześnie 6 parametrów: temperatura, ciśnienie, wilgotność, wiatr, kierunek wiatru, zachmurzenie</p>
                     </div>
                     
                     <div class="ml-section">
@@ -787,6 +787,7 @@
                                 <button class="train-btn" onclick="trainModel()">Trenuj model pełny</button>
                                 <button class="train-btn" onclick="trainSimpleModel()">Trenuj model prosty</button>
                                 <button class="train-btn" onclick="trainVerySimpleModel()">Trenuj model bardzo prosty</button>
+                                <button class="train-btn" onclick="trainExtendedModel()">Trenuj model rozszerzony</button>
                                 <button class="train-btn" onclick="generateSampleData()">Dodaj dane testowe</button>
                                 <button class="predict-btn" onclick="predictWithModel()">Prognozuj</button>
                             </div>
@@ -1302,15 +1303,15 @@
                 means: means,
                 stds: stds,
                 featureNames: [
-                    'Temperatura', 'Ciśnienie', 'Wilgotność', 'Pora roku', 'Pora dnia'
+                    'Temperatura', 'Ciśnienie', 'Wilgotność', 'Wiatr', 'Kierunek wiatru', 'Zachmurzenie'
                 ]
             };
         }
 
-        function prepareMultiFeatureMLData() {
+        function prepareExtendedMLData() {
             const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
             
-            console.log('prepareMultiFeatureMLData - liczba połowów:', catches.length);
+            console.log('prepareExtendedMLData - liczba połowów:', catches.length);
             
             if (catches.length < 10) {
                 console.log('Za mało połowów');
@@ -1330,30 +1331,21 @@
                 }
                 
                 const weather = catchItem.weather;
-                const date = new Date(catchItem.date);
                 
                 // Ekstrakcja cech
                 const temp = weather.temperature;
                 const pressure = weather.pressure;
                 const humidity = weather.humidity;
+                const windSpeed = weather.windSpeed;
+                const windDirection = weather.windDirection;
+                const clouds = weather.clouds || 50; // Domyślnie 50% jeśli nie ma danych
                 
-                console.log(`Dane pogodowe: temp=${temp}, pressure=${pressure}, humidity=${humidity}`);
-                
-                // Pora roku (0-3)
-                const month = date.getMonth();
-                const season = (month >= 2 && month <= 4) ? 1 : 
-                              (month >= 5 && month <= 7) ? 2 : 
-                              (month >= 8 && month <= 10) ? 3 : 0;
-                
-                // Pora dnia (0-3)
-                const hour = date.getHours();
-                const timeOfDay = (hour >= 5 && hour < 8) ? 0 : 
-                                 (hour >= 8 && hour < 16) ? 1 : 
-                                 (hour >= 16 && hour < 21) ? 2 : 3;
+                console.log(`Dane pogodowe: temp=${temp}, pressure=${pressure}, humidity=${humidity}, windSpeed=${windSpeed}, windDirection=${windDirection}, clouds=${clouds}`);
                 
                 // Sprawdź, czy wszystkie cechy są zdefiniowane
-                if (temp !== undefined && pressure !== undefined && humidity !== undefined) {
-                    const featureVector = [temp, pressure, humidity, season, timeOfDay];
+                if (temp !== undefined && pressure !== undefined && humidity !== undefined && 
+                    windSpeed !== undefined && windDirection !== undefined) {
+                    const featureVector = [temp, pressure, humidity, windSpeed, windDirection, clouds];
                     features.push(featureVector);
                     targets.push(catchItem.weight);
                     console.log(`Dodano cechy: ${featureVector}, waga: ${catchItem.weight}`);
@@ -1515,26 +1507,15 @@
         }
 
         function extractCurrentFeatures(weatherData) {
-            const date = new Date();
-            
             // Podstawowe parametry
             const temp = weatherData.main.temp;
             const pressure = weatherData.main.pressure;
             const humidity = weatherData.main.humidity;
+            const windSpeed = weatherData.wind.speed;
+            const windDirection = weatherData.wind.deg;
+            const clouds = weatherData.clouds ? weatherData.clouds.all : 50;
             
-            // Pora roku (0-3)
-            const month = date.getMonth();
-            const season = (month >= 2 && month <= 4) ? 1 : 
-                          (month >= 5 && month <= 7) ? 2 : 
-                          (month >= 8 && month <= 10) ? 3 : 0;
-            
-            // Pora dnia (0-3)
-            const hour = date.getHours();
-            const timeOfDay = (hour >= 5 && hour < 8) ? 0 : 
-                             (hour >= 8 && hour < 16) ? 1 : 
-                             (hour >= 16 && hour < 21) ? 2 : 3;
-            
-            return [temp, pressure, humidity, season, timeOfDay];
+            return [temp, pressure, humidity, windSpeed, windDirection, clouds];
         }
 
         function normalizeFeatureVector(featureVector, means, stds) {
@@ -1577,14 +1558,16 @@
                             'rgba(54, 162, 235, 0.7)',
                             'rgba(255, 206, 86, 0.7)',
                             'rgba(75, 192, 192, 0.7)',
-                            'rgba(153, 102, 255, 0.7)'
+                            'rgba(153, 102, 255, 0.7)',
+                            'rgba(255, 159, 64, 0.7)'
                         ],
                         borderColor: [
                             'rgba(255, 99, 132, 1)',
                             'rgba(54, 162, 235, 1)',
                             'rgba(255, 206, 86, 1)',
                             'rgba(75, 192, 192, 1)',
-                            'rgba(153, 102, 255, 1)'
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
                         ],
                         borderWidth: 1
                     }]
@@ -1913,6 +1896,114 @@
             }
         }
 
+        function trainExtendedModel() {
+            console.log('Rozpoczynam trenowanie modelu rozszerzonego');
+            
+            const data = prepareExtendedMLData();
+            
+            console.log('Dane przygotowane:', data);
+            
+            if (!data) {
+                document.getElementById('ml-status').textContent = 
+                    'Za mało danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi pogodowymi.';
+                return;
+            }
+            
+            // Dodatkowe sprawdzenie czy mamy wystarczająco danych
+            if (!data.features || data.features.length < 10) {
+                document.getElementById('ml-status').textContent = 
+                    'Za mało kompletnych danych do trenowania modelu. Potrzebujesz co najmniej 10 połowów z kompletnymi danymi pogodowymi.';
+                return;
+            }
+            
+            // Sprawdź, czy data.targets nie jest puste i ma tę samą długość co features
+            if (!data.targets || data.targets.length !== data.features.length) {
+                document.getElementById('ml-status').textContent = 
+                    'Dane treningowe są niekompletne. Sprawdź zapisane połowy.';
+                return;
+            }
+            
+            const statusElement = document.getElementById('ml-status');
+            const resultsElement = document.getElementById('ml-results');
+            
+            statusElement.textContent = 'Trenowanie modelu rozszerzonego...';
+            
+            try {
+                // Pobierz wartość lambda z suwaka
+                const lambda = parseFloat(document.getElementById('ml-lambda').value);
+                
+                // Sprawdź, czy currentWeatherData istnieje
+                if (!currentWeatherData) {
+                    throw new Error('Brak danych pogodowych. Proszę najpierw pobrać prognozę pogody.');
+                }
+                
+                console.log('Rozpoczynam trenowanie regresji Ridge dla modelu rozszerzonego');
+                
+                // Trenuj model regresji Ridge
+                const model = trainRidgeRegression(data.features, data.targets, lambda);
+                
+                console.log('Model rozszerzony wytrenowany:', model);
+                
+                // Oceń model na danych treningowych
+                const predictions = data.features.map(f => 
+                    predictRidgeRegression(model, f)
+                );
+                const r2 = calculateR2(data.targets, predictions);
+                
+                console.log('R² modelu rozszerzonego:', r2);
+                
+                // Oblicz maksymalną wagę z danych treningowych
+                const maxWeight = Math.max(...data.targets);
+                
+                console.log('Maksymalna waga:', maxWeight);
+                
+                // Przechowaj model z parametrami normalizacji i dodatkowymi danymi
+                mlModel = {
+                    type: 'extended',
+                    model: model,
+                    means: data.means,
+                    stds: data.stds,
+                    featureNames: data.featureNames,
+                    r2: r2,
+                    maxWeight: maxWeight
+                };
+                
+                console.log('Model rozszerzony zapisany:', mlModel);
+                
+                // Wyświetl wyniki
+                document.getElementById('ml-r2').textContent = r2.toFixed(3);
+                
+                // Prognozuj dla aktualnych warunków
+                const currentFeatures = extractCurrentFeatures(currentWeatherData);
+                console.log('Aktualne cechy dla modelu rozszerzonego:', currentFeatures);
+                
+                const normalizedCurrent = normalizeFeatureVector(currentFeatures, data.means, data.stds);
+                console.log('Znormalizowane aktualne cechy:', normalizedCurrent);
+                
+                const prediction = predictRidgeRegression(model, normalizedCurrent);
+                console.log('Predykcja surowa modelu rozszerzonego:', prediction);
+                
+                // Normalizuj predykcję do skali 0-25
+                const normalizedPrediction = Math.min(25, Math.max(0, (prediction / maxWeight) * 25));
+                
+                document.getElementById('ml-prediction').textContent = normalizedPrediction.toFixed(1) + '/25';
+                
+                // Oblicz pewność predykcji
+                const confidence = Math.min(100, Math.max(0, r2 * 100));
+                document.getElementById('ml-confidence').textContent = confidence.toFixed(0) + '%';
+                
+                resultsElement.style.display = 'block';
+                statusElement.textContent = 'Model rozszerzony został wytrenowany pomyślnie!';
+                
+                // Wyświetl wykres ważności cech
+                displayFeatureImportances(model, data.featureNames);
+                
+            } catch (error) {
+                console.error('Błąd trenowania modelu rozszerzonego:', error);
+                statusElement.textContent = 'Błąd podczas trenowania: ' + error.message;
+            }
+        }
+
         function generateSampleData() {
             // Funkcja pomocnicza do generowania losowej liczby w zakresie
             function randomBetween(min, max) {
@@ -1978,7 +2069,8 @@
                     windSpeed: randomBetween(0, 15), // Prędkość wiatru w m/s
                     windDirection: Math.round(randomBetween(0, 360)), // Kierunek wiatru w stopniach
                     description: condition.description,
-                    id: condition.id
+                    id: condition.id,
+                    clouds: Math.round(randomBetween(0, 100)) // Zachmurzenie w %
                 };
             }
             
@@ -2085,6 +2177,16 @@
                     const currentTemp = currentWeatherData.main.temp;
                     prediction = mlModel.a * currentTemp + mlModel.b;
                     confidence = Math.min(100, Math.max(0, mlModel.correlation * 100));
+                } else if (mlModel.type === 'extended') {
+                    // Użyj modelu rozszerzonego
+                    const currentFeatures = extractCurrentFeatures(currentWeatherData);
+                    const normalizedCurrent = normalizeFeatureVector(currentFeatures, mlModel.means, mlModel.stds);
+                    prediction = predictRidgeRegression(mlModel.model, normalizedCurrent);
+                    
+                    // Normalizuj predykcję
+                    const maxWeight = mlModel.maxWeight;
+                    prediction = (prediction / maxWeight) * 25;
+                    confidence = Math.min(100, Math.max(0, mlModel.r2 * 100));
                 } else {
                     // Użyj pełnego modelu
                     const currentFeatures = extractCurrentFeatures(currentWeatherData);
