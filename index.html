@@ -1308,10 +1308,10 @@
             };
         }
 
-        function prepareExtendedMLData() {
+        function prepareMultiFeatureMLData() {
             const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
             
-            console.log('prepareExtendedMLData - liczba połowów:', catches.length);
+            console.log('prepareMultiFeatureMLData - liczba połowów:', catches.length);
             
             if (catches.length < 10) {
                 console.log('Za mało połowów');
@@ -1899,7 +1899,7 @@
         function trainExtendedModel() {
             console.log('Rozpoczynam trenowanie modelu rozszerzonego');
             
-            const data = prepareExtendedMLData();
+            const data = prepareMultiFeatureMLData();
             
             console.log('Dane przygotowane:', data);
             
