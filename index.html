@@ -1066,16 +1066,13 @@
             currentLongitude = null;
         }
 
-        // Funkcja do szybkiego dodawania połowu
+        // Funkcja do szybkiego dodawania 5 połowów z symulowanymi danymi
         async function quickAddCatch() {
             if (!currentWeatherData) {
                 alert('Najpierw pobierz dane pogodowe dla lokalizacji.');
                 return;
             }
 
-            // Pobierz gatunek z głównego formularza
-            const species = document.getElementById('species').value;
-            
             // Pobierz lokalizację GPS jeśli jest dostępna
             let latitude = null;
             let longitude = null;
@@ -1092,36 +1089,73 @@
                 console.error('Błąd pobierania lokalizacji:', error);
             }
 
-            // Przygotuj dane połowu z domyślnymi wartościami
-            const catchData = {
-                id: Date.now(),
-                date: new Date().toISOString(),
-                city: document.getElementById('city').value,
-                species: species,
-                weight: 1.0, // Domyślna waga
-                length: 40, // Domyślna długość
-                bait: 'Nie określono',
-                notes: 'Szybki zapis połowu',
-                latitude: latitude,
-                longitude: longitude,
-                locationName: locationName,
-                weather: {
-                    temperature: currentWeatherData.main.temp,
-                    pressure: currentWeatherData.main.pressure,
-                    humidity: currentWeatherData.main.humidity,
-                    windSpeed: currentWeatherData.wind.speed,
-                    windDirection: currentWeatherData.wind.deg,
-                    description: currentWeatherData.weather[0].description,
-                    clouds: currentWeatherData.clouds ? currentWeatherData.clouds.all : 50,
-                    precipitation: currentWeatherData.rain ? currentWeatherData.rain['1h'] : 0
-                }
-            };
+            // Definicje 3 gatunków ryb do losowania
+            const fishSpecies = ['szczupak', 'okon', 'sandacz'];
             
             // Pobierz istniejące połowy z localStorage
             let catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
             
-            // Dodaj nowy połów
-            catches.push(catchData);
+            // Dodaj 5 symulowanych połowów
+            for (let i = 0; i < 5; i++) {
+                // Wylosuj gatunek ryby
+                const randomSpecies = fishSpecies[Math.floor(Math.random() * fishSpecies.length)];
+                
+                // Symulowane wartości w zależności od gatunku
+                let weight, length, bait;
+                
+                switch(randomSpecies) {
+                    case 'szczupak':
+                        weight = (Math.random() * 4 + 0.5).toFixed(2); // 0.5 - 4.5 kg
+                        length = Math.floor(Math.random() * 50 + 40); // 40 - 90 cm
+                        bait = ['wobbler', 'gumka', 'żyworąbka', 'blacha', 'spinn'][Math.floor(Math.random() * 5)];
+                        break;
+                    case 'sandacz':
+                        weight = (Math.random() * 3 + 0.8).toFixed(2); // 0.8 - 3.8 kg
+                        length = Math.floor(Math.random() * 40 + 45); // 45 - 85 cm
+                        bait = ['gumka', 'wobbler', 'jig', 'twister', 'ripper'][Math.floor(Math.random() * 5)];
+                        break;
+                    case 'okon':
+                        weight = (Math.random() * 0.8 + 0.2).toFixed(2); // 0.2 - 1.0 kg
+                        length = Math.floor(Math.random() * 20 + 25); // 25 - 45 cm
+                        bait = ['obrotówka', 'woblerek', 'przynęta gumowa', 'błystka', 'spinn'][Math.floor(Math.random() * 5)];
+                        break;
+                }
+                
+                // Symuluj różne daty połowów (ostatnie 5 dni)
+                const catchDate = new Date();
+                catchDate.setDate(catchDate.getDate() - i); // Każdy kolejny połów jest o dzień wcześniej
+                
+                // Symuluj różne godziny połowów
+                catchDate.setHours(Math.floor(Math.random() * 14) + 6); // Godziny 6-20
+                
+                // Przygotuj dane połowu
+                const catchData = {
+                    id: Date.now() + i, // Unikalne ID dla każdego połowu
+                    date: catchDate.toISOString(),
+                    city: document.getElementById('city').value,
+                    species: randomSpecies,
+                    weight: parseFloat(weight),
+                    length: parseInt(length),
+                    bait: bait,
+                    notes: `Symulowany połów #${i+1} - ${randomSpecies}`,
+                    latitude: latitude,
+                    longitude: longitude,
+                    locationName: locationName,
+                    weather: {
+                        temperature: currentWeatherData.main.temp + (Math.random() * 4 - 2), // Temperatura z małym wahaniem
+                        pressure: currentWeatherData.main.pressure + (Math.random() * 10 - 5), // Ciśnienie z małym wahaniem
+                        humidity: Math.max(30, Math.min(100, currentWeatherData.main.humidity + (Math.random() * 20 - 10))), // Wilgotność z małym wahaniem
+                        windSpeed: Math.max(0, currentWeatherData.wind.speed + (Math.random() * 3 - 1.5)), // Wiatr z małym wahaniem
+                        windDirection: (currentWeatherData.wind.deg + (Math.random() * 60 - 30)) % 360, // Kierunek wiatru z małym wahaniem
+                        description: currentWeatherData.weather[0].description,
+                        clouds: Math.max(0, Math.min(100, (currentWeatherData.clouds ? currentWeatherData.clouds.all : 50) + (Math.random() * 30 - 15))), // Zachmurzenie z małym wahaniem
+                        precipitation: Math.max(0, (currentWeatherData.rain ? currentWeatherData.rain['1h'] : 0) + (Math.random() * 2 - 1)) // Opady z małym wahaniem
+                    }
+                };
+                
+                // Dodaj nowy połów
+                catches.push(catchData);
+            }
             
             // Zapisz zaktualizowaną listę
             try {
@@ -1133,7 +1167,7 @@
             }
             
             // Pokaż komunikat o sukcesie
-            alert('Połów został zapisany pomyślnie!');
+            alert('Dodano 5 symulowanych połowów do historii!');
             
             // Przejdź do zakładki historii
             document.querySelector('[onclick="showTab(\'history\')"]').click();
