@@ -824,9 +824,9 @@
                         <h4>Trenuj model predykcyjny</h4>
                         <div class="ml-controls">
                             <div class="ml-buttons">
-                                <button class="train-btn" onclick="generateRandomData(20)">Dodaj 20 losowych danych</button>
+                                <button class="train-btn" onclick="loadTrainingDataFromHistory()" id="loadDataButton">📊 Załaduj dane z historii</button>
                                 <button class="train-btn" onclick="trainModel()" id="trainButton" disabled>🚀 Trenuj Model</button>
-                                <button class="predict-btn" onclick="predictWithModel()" id="predictButton" disabled>Prognozuj</button>
+                                <button class="predict-btn" onclick="predictWithModel()" id="predictButton" disabled>🔮 Prognozuj z GPS</button>
                                 <button class="train-btn" onclick="clearTrainingData()">Wyczyść dane</button>
                             </div>
                         </div>
@@ -954,6 +954,7 @@
         let currentActivityData = null;
         let currentLatitude = null;
         let currentLongitude = null;
+        let trainingDataLoadedOnce = false;
         
         // Zmienne dla modelu ML
         let trainingData = [];
@@ -1014,6 +1015,11 @@
             if (tabName === 'ml') {
                 updateMLDataCount();
                 updateMLInputs();
+                // Automatycznie załaduj dane z historii przy pierwszym wejściu do zakładki
+                if (!trainingDataLoadedOnce) {
+                    loadTrainingDataFromHistory();
+                    trainingDataLoadedOnce = true;
+                }
             }
         }
 
@@ -1380,6 +1386,53 @@
             document.getElementById('ml-precip').textContent = (currentWeatherData.rain ? currentWeatherData.rain['1h'] : 0).toFixed(1) + ' mm/h';
         }
 
+        // Funkcja do ładowania danych treningowych z historii połowów
+        function loadTrainingDataFromHistory() {
+            const catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
+            trainingData = [];
+            
+            if (catches.length === 0) {
+                document.getElementById('ml-status').textContent = "Brak danych w historii połowów. Dodaj połowy, aby trenować model.";
+                document.getElementById('trainButton').disabled = true;
+                return;
+            }
+            
+            // Przekształć dane z historii połowów na format odpowiedni dla modelu
+            catches.forEach(catchItem => {
+                const date = new Date(catchItem.date);
+                const timeOfDay = date.getHours();
+                const monthOfYear = date.getMonth() + 1;
+                
+                // Oblicz aktywność na podstawie wagi i długości ryby (im większa ryba, tym lepsze warunki)
+                // To jest uproszczona metoda - w rzeczywistości aktywność zależy od wielu czynników
+                const activity = Math.min(10, Math.max(0, 
+                    (catchItem.weight * 2) + // Waga ma wpływ na aktywność
+                    (catchItem.length * 0.1) + // Długość też
+                    (Math.random() * 2 - 1) // Dodajemy losowość
+                ));
+                
+                trainingData.push({
+                    rawFeatures: [
+                        catchItem.weather.temperature,
+                        catchItem.weather.pressure,
+                        catchItem.weather.humidity,
+                        catchItem.weather.windSpeed,
+                        catchItem.weather.windDirection,
+                        catchItem.weather.clouds,
+                        catchItem.weather.precipitation,
+                        timeOfDay,
+                        monthOfYear
+                    ],
+                    target: activity
+                });
+            });
+            
+            updateTrainingDataOutput();
+            document.getElementById('trainButton').disabled = trainingData.length < 5;
+            document.getElementById('ml-status').textContent = `Załadowano ${trainingData.length} rekordów z historii połowów.`;
+            updateMLDataCount();
+        }
+
         // --- 1. PRZYGOTOWANIE DANYCH (FEATURE ENGINEERING) ---
         function prepareFeatures(dataPoint) {
             const [temp, pressure, humidity, windSpeed, windDirection, clouds, precipitation, timeOfDay, monthOfYear] = dataPoint;
@@ -1424,8 +1477,8 @@
 
         // --- 3. TRENING MODELU (SPADEK GRADIENTU) ---
         async function trainModel() {
-            if (trainingData.length < 10) { 
-                alert("Potrzeba co najmniej 10 punktów danych do trenowania."); 
+            if (trainingData.length < 5) { 
+                alert("Potrzeba co najmniej 5 punktów danych do trenowania."); 
                 return; 
             }
             
@@ -1493,15 +1546,46 @@
         }
         
         // --- 4. PREDYKCJA ---
-        function predictWithModel() {
+        async function predictWithModel() {
             if (!model) { 
                 alert("Najpierw wytrenuj model!"); 
                 return; 
             }
             
-            if (!currentWeatherData) {
-                alert("Najpierw pobierz dane pogodowe!");
-                return;
+            const statusDiv = document.getElementById('ml-status');
+            statusDiv.textContent = "Pobieranie danych pogodowych dla prognozy...";
+            
+            let weatherData;
+            
+            // Spróbuj pobrać lokalizację GPS, jeśli jest dostępna
+            if (navigator.geolocation) {
+                try {
+                    const position = await getCurrentPosition();
+                    const { latitude, longitude } = position.coords;
+                    
+                    // Pobierz dane pogodowe dla aktualnej lokalizacji
+                    weatherData = await getWeatherForCoordinates(latitude, longitude);
+                    statusDiv.textContent = "Użyto lokalizacji GPS do prognozy.";
+                } catch (error) {
+                    console.error("Błąd pobierania lokalizacji GPS:", error);
+                    statusDiv.textContent = "Nie udało się pobrać lokalizacji GPS, używam ostatniej miejscowości.";
+                    
+                    // Użyj ostatniej wpisanej miejscowości
+                    if (!currentWeatherData) {
+                        alert("Najpierw pobierz dane pogodowe dla jakiejś miejscowości!");
+                        return;
+                    }
+                    weatherData = currentWeatherData;
+                }
+            } else {
+                statusDiv.textContent = "GPS nie jest dostępny, używam ostatniej miejscowości.";
+                
+                // Użyj ostatniej wpisanej miejscowości
+                if (!currentWeatherData) {
+                    alert("Najpierw pobierz dane pogodowe dla jakiejś miejscowości!");
+                    return;
+                }
+                weatherData = currentWeatherData;
             }
             
             const now = new Date();
@@ -1509,13 +1593,13 @@
             const monthOfYear = now.getMonth() + 1;
             
             const rawFeatures = [
-                parseFloat(currentWeatherData.main.temp), 
-                parseFloat(currentWeatherData.main.pressure),
-                parseFloat(currentWeatherData.main.humidity),
-                parseFloat(currentWeatherData.wind.speed),
-                parseFloat(currentWeatherData.wind.deg || 0),
-                parseFloat(currentWeatherData.clouds ? currentWeatherData.clouds.all : 50),
-                parseFloat(currentWeatherData.rain ? currentWeatherData.rain['1h'] : 0),
+                parseFloat(weatherData.main.temp), 
+                parseFloat(weatherData.main.pressure),
+                parseFloat(weatherData.main.humidity),
+                parseFloat(weatherData.wind.speed),
+                parseFloat(weatherData.wind.deg || 0),
+                parseFloat(weatherData.clouds ? weatherData.clouds.all : 50),
+                parseFloat(weatherData.rain ? weatherData.rain['1h'] : 0),
                 parseFloat(timeOfDay),
                 parseFloat(monthOfYear)
             ];
@@ -1530,6 +1614,7 @@
             let prediction = featuresWithBias.reduce((sum, f, i) => sum + model.weights[i] * f, 0);
             prediction = Math.max(0, Math.min(10, prediction));
             
+            // Wyświetl wynik prognozy
             document.getElementById('ml-prediction').textContent = prediction.toFixed(2) + '/10';
             
             // Oblicz dokładność modelu na podstawie danych treningowych
@@ -1551,6 +1636,84 @@
             const accuracy = Math.max(0, 100 - (mae / 10) * 100);
             
             document.getElementById('ml-accuracy').textContent = accuracy.toFixed(1) + '%';
+            
+            // Zintegruj wynik modelu z ogólną oceną aktywności ryb
+            integrateMLPredictionWithActivityScore(prediction);
+        }
+
+        // Funkcja pomocnicza do pobierania aktualnej pozycji
+        function getCurrentPosition() {
+            return new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            });
+        }
+
+        // Funkcja do pobierania danych pogodowych dla współrzędnych
+        async function getWeatherForCoordinates(latitude, longitude) {
+            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric&lang=pl`;
+            
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Błąd pobierania danych pogodowych: ${response.status}`);
+            }
+            
+            return await response.json();
+        }
+
+        // Funkcja integrująca wynik ML z ogólną oceną aktywności
+        function integrateMLPredictionWithActivityScore(mlPrediction) {
+            // Jeśli mamy aktualne dane o aktywności, zintegruj je z wynikiem ML
+            if (currentActivityData) {
+                // Przekształć wynik ML (0-10) na skalę 0-25 używaną w aplikacji
+                const mlScoreScaled = (mlPrediction / 10) * 25;
+                
+                // Oblicz nową, ulepszoną ocenę (średnia ważona: 70% tradycyjna, 30% ML)
+                const traditionalScore = currentActivityData.score;
+                const enhancedScore = (traditionalScore * 0.7) + (mlScoreScaled * 0.3);
+                
+                // Aktualizuj wyświetlaną ocenę
+                const percentage = (enhancedScore / 25) * 100;
+                let activityLevel = "", activityClass = "";
+                if (percentage >= 80) { activityLevel = "Doskonała"; activityClass = "excellent"; }
+                else if (percentage >= 60) { activityLevel = "Dobra"; activityClass = "good"; }
+                else if (percentage >= 40) { activityLevel = "Umiarkowana"; activityClass = "moderate"; }
+                else { activityLevel = "Słaba"; activityClass = "poor"; }
+                
+                // Zaktualizuj wyświetlaną ocenę w zakładce "Aktualna analiza"
+                const activityScoreDiv = document.getElementById('activity-score');
+                if (activityScoreDiv) {
+                    activityScoreDiv.innerHTML = `
+                        <div class="activity-result ${activityClass}">
+                            Aktywność: ${activityLevel} (Ocena: ${enhancedScore.toFixed(1)}/25)
+                            <div style="font-size: 0.7em; margin-top: 5px;">
+                                Tradycyjna: ${traditionalScore.toFixed(1)}/25, ML: ${mlScoreScaled.toFixed(1)}/25
+                            </div>
+                        </div>`;
+                }
+                
+                // Dodaj informację o użyciu ML w sekcji wskazówek
+                const tipDiv = document.getElementById('fishing-tip');
+                if (tipDiv) {
+                    // Usuń poprzednią informację o ML, jeśli istnieje
+                    const existingMLInfo = tipDiv.querySelector('.ml-info');
+                    if (existingMLInfo) {
+                        existingMLInfo.remove();
+                    }
+                    
+                    const mlInfo = document.createElement('div');
+                    mlInfo.className = 'ml-info';
+                    mlInfo.style.marginTop = '10px';
+                    mlInfo.style.fontSize = '0.9em';
+                    mlInfo.style.fontStyle = 'italic';
+                    mlInfo.innerHTML = `<strong>Analiza ML:</strong> Prognoza oparta na uczeniu maszynowym: ${mlPrediction.toFixed(2)}/10. 
+                                        Ta analiza uwzględnia Twoją historię połowów i aktualne warunki pogodowe.`;
+                    tipDiv.appendChild(mlInfo);
+                }
+            }
         }
 
         // --- FUNKCJE POMOCNICZE ---
