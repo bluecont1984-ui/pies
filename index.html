@@ -587,14 +587,6 @@
         .predict-btn:hover {
             background-color: #218838;
         }
-        .fictional-btn {
-            background-color: #6f42c1;
-            flex: 1;
-            min-width: 120px;
-        }
-        .fictional-btn:hover {
-            background-color: #5a32a3;
-        }
         .ml-results {
             background-color: #e9ecef;
             border-radius: 8px;
@@ -722,7 +714,6 @@
                                 <div class="wind-compass">
                                     <div class="compass-face">
                                         <div class="compass-rose">
-                                            <!-- Linie kierunków -->
                                             <div class="compass-direction-line" style="transform: rotate(0deg);"></div>
                                             <div class="compass-direction-line" style="transform: rotate(45deg);"></div>
                                             <div class="compass-direction-line" style="transform: rotate(90deg);"></div>
@@ -759,8 +750,7 @@
                             </div>
                         </div>
                         <div id="empty-cell">
-                            <!-- Pusta komórka dla zachowania układu siatki -->
-                        </div>
+                            </div>
                     </div>
                     <div id="fishing-tip" class="tip"></div>
                     
@@ -835,7 +825,6 @@
                                 <button class="train-btn" onclick="loadTrainingDataFromHistory()" id="loadDataButton">📊 Załaduj dane z historii</button>
                                 <button class="train-btn" onclick="trainModel()" id="trainButton" disabled>🚀 Trenuj Model</button>
                                 <button class="predict-btn" onclick="predictWithModel()" id="predictButton" disabled>🔮 Prognozuj z GPS</button>
-                                <button class="fictional-btn" onclick="addFictionalCatchData()" id="fictionalButton">🎣 Dodaj fikcyjne dane</button>
                                 <button class="train-btn" onclick="clearTrainingData()">Wyczyść dane</button>
                             </div>
                         </div>
@@ -1176,6 +1165,7 @@
             const longitude = document.getElementById('catch-longitude').value;
             
             if (latitude && longitude) {
+                // POPRAWIONY LINK
                 const googleMapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
                 window.open(googleMapsUrl, '_blank');
             } else {
@@ -1393,139 +1383,6 @@
             document.getElementById('ml-month').textContent = monthOfYear;
             document.getElementById('ml-clouds').textContent = (currentWeatherData.clouds ? currentWeatherData.clouds.all : 50) + '%';
             document.getElementById('ml-precip').textContent = (currentWeatherData.rain ? currentWeatherData.rain['1h'] : 0).toFixed(1) + ' mm/h';
-        }
-
-        // Funkcja do dodawania fikcyjnych danych połowu
-        function addFictionalCatchData() {
-            const statusDiv = document.getElementById('ml-status');
-            statusDiv.textContent = "Dodaję fikcyjne dane połowu...";
-            
-            // Lista możliwych gatunków
-            const speciesOptions = ['szczupak', 'okon', 'sandacz'];
-            
-            // Lista możliwych przynęt
-            const baitOptions = [
-                'Wobbler', 'Gumka', 'Blacha', 'Wobler', 'Jerkbait', 'Crankbait',
-                'Spinner', 'Twister', 'Vibrator', 'Pilker', 'Żywca', 'Robak'
-            ];
-            
-            // Lista możliwych uwag
-            const notesOptions = [
-                'Bardzo agresywne brania',
-                'Ryby brały przy powolnym prowadzeniu',
-                'Udało się złowić wśród trzcin',
-                'Skuteczna okazała się przynęta w kolorze zielonym',
-                'Brania przy zachmurzeniu',
-                'Aktywne żerowanie o wschodzie słońca',
-                'Dobre wyniki przy silnym wietrze',
-                'Połów na głębokości 5 metrów',
-                'Skuteczna technika stop-and-go',
-                'Ryby brały przy opadach deszczu'
-            ];
-            
-            // Lista fikcyjnych miejscowości
-            const cityOptions = [
-                'Mikołajki', 'Giżycko', 'Ełk', 'Augustów', 'Pisz', 'Ruciane-Nida',
-                'Węgorzewo', 'Orzysz', 'Ryn', 'Mikołajki', 'Nidzica', 'Szczytno'
-            ];
-            
-            // Generuj losowe dane
-            const randomSpecies = speciesOptions[Math.floor(Math.random() * speciesOptions.length)];
-            const randomWeight = (Math.random() * 5 + 0.5).toFixed(2); // Waga między 0.5 a 5.5 kg
-            const randomLength = Math.floor(Math.random() * 60 + 30); // Długość między 30 a 90 cm
-            const randomBait = baitOptions[Math.floor(Math.random() * baitOptions.length)];
-            const randomNotes = notesOptions[Math.floor(Math.random() * notesOptions.length)];
-            const randomCity = cityOptions[Math.floor(Math.random() * cityOptions.length)];
-            
-            // Generuj losową datę (w ciągu ostatniego roku)
-            const now = new Date();
-            const randomDaysAgo = Math.floor(Math.random() * 365);
-            const randomDate = new Date(now);
-            randomDate.setDate(now.getDate() - randomDaysAgo);
-            
-            // Generuj losowe współrzędne w okolicach Mazur
-            const baseLatitude = 53.8;
-            const baseLongitude = 21.5;
-            const randomLatitude = (baseLatitude + (Math.random() - 0.5) * 0.5).toFixed(6);
-            const randomLongitude = (baseLongitude + (Math.random() - 0.5) * 0.5).toFixed(6);
-            
-            // Generuj losowe dane pogodowe
-            const randomTemperature = (Math.random() * 25 + 5).toFixed(1); // 5-30°C
-            const randomPressure = Math.floor(Math.random() * 50 + 990); // 990-1040 hPa
-            const randomHumidity = Math.floor(Math.random() * 60 + 40); // 40-100%
-            const randomWindSpeed = (Math.random() * 10 + 1).toFixed(1); // 1-11 m/s
-            const randomWindDirection = Math.floor(Math.random() * 360); // 0-359 stopni
-            const randomClouds = Math.floor(Math.random() * 100); // 0-100%
-            const randomPrecipitation = Math.random() > 0.7 ? (Math.random() * 5).toFixed(1) : 0; // 30% szans na opady
-            
-            // Opisy pogody
-            const weatherDescriptions = [
-                'Bezchmurnie', 'Małe zachmurzenie', 'Częściowe zachmurzenie', 
-                'Zachmurzenie duże', 'Mgła', 'Deszcz', 'Burza'
-            ];
-            const randomWeatherDescription = weatherDescriptions[Math.floor(Math.random() * weatherDescriptions.length)];
-            
-            // Pobierz nazwę lokalizacji
-            let locationName = '';
-            try {
-                locationName = await getLocationName(randomLatitude, randomLongitude);
-            } catch (error) {
-                console.error('Błąd pobierania nazwy lokalizacji:', error);
-            }
-            
-            // Przygotuj obiekt z danymi połowu
-            const catchData = {
-                id: Date.now(),
-                date: randomDate.toISOString(),
-                city: randomCity,
-                species: randomSpecies,
-                weight: parseFloat(randomWeight),
-                length: parseInt(randomLength),
-                bait: randomBait,
-                notes: randomNotes,
-                latitude: parseFloat(randomLatitude),
-                longitude: parseFloat(randomLongitude),
-                locationName: locationName,
-                weather: {
-                    temperature: parseFloat(randomTemperature),
-                    pressure: randomPressure,
-                    humidity: randomHumidity,
-                    windSpeed: parseFloat(randomWindSpeed),
-                    windDirection: randomWindDirection,
-                    description: randomWeatherDescription,
-                    clouds: randomClouds,
-                    precipitation: parseFloat(randomPrecipitation)
-                }
-            };
-            
-            // Pobierz istniejące połowy z localStorage
-            let catches = JSON.parse(localStorage.getItem('fishCatches')) || [];
-            
-            // Dodaj nowy połów
-            catches.push(catchData);
-            
-            // Zapisz zaktualizowaną listę
-            try {
-                localStorage.setItem('fishCatches', JSON.stringify(catches));
-            } catch (e) {
-                console.error('Błąd zapisu do localStorage:', e);
-                statusDiv.textContent = "Błąd zapisu danych. Pamięć przeglądarki może być pełna.";
-                statusDiv.style.color = '#dc3545';
-                return;
-            }
-            
-            statusDiv.textContent = `Dodano fikcyjny połów: ${randomSpecies}, ${randomWeight}kg, ${randomLength}cm z ${randomCity}`;
-            statusDiv.style.color = '#28a745';
-            
-            // Zaktualizuj licznik danych
-            updateMLDataCount();
-            
-            // Jeśli model jest już wytrenowany, zapytaj czy przeładować dane
-            if (model) {
-                if (confirm('Czy chcesz przeładować dane treningowe z uwzględnieniem nowego połowu?')) {
-                    loadTrainingDataFromHistory();
-                }
-            }
         }
 
         // Funkcja do ładowania danych treningowych z historii połowów
