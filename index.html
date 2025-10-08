@@ -10,6 +10,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Prognoza Ryb">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -136,7 +139,7 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        #pressureChart, #forecastChart, #windChart, #mlChart {
+        #pressureChart, #forecastChart, #mlChart {
             height: 200px !important;
             width: 100% !important;
         }
@@ -312,179 +315,110 @@
             font-style: italic;
         }
         
-        /* Style dla kompasu wiatru - ZAAWANSOWANE */
+        /* Style dla kompasu wiatru - ZAKTUALIZOWANE */
         .wind-compass-container {
             display: flex;
             flex-direction: column;
             align-items: center;
             margin-top: 20px;
         }
-        .wind-compass {
+        .fishing-widget {
+            width: 280px;
+            height: 280px;
             position: relative;
-            width: 220px;
-            height: 220px;
+            background-color: #2c3e50;
+            background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+            border-radius: 50%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15), inset 0 0 15px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
             margin: 0 auto;
         }
-        .compass-face {
+        .dial {
+            width: 90%;
+            height: 90%;
+            background-color: #f5f0e6;
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZHRoPSI1MCIgdmlld0JveD0iMCAwIDEwMCAxMDAiPgo8ZmlsdGVyIGlkPSJub2lzZSI+CjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjciIG51bU9jdGF2ZXM9IjEwIiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+CjxmZUNvbG9yTWF0cml4IHR5cGU9InNhdHVyYXRlIiB2YWx1ZXM9IjAiLz4KPC9maWx0ZXI+CjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNub2lzZSkiLz4KPC9zdmc+');
+            opacity: 0.6;
+            border-radius: 50%;
+            border: 2px solid #5d4a3a;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.15);
             position: relative;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
-            border: 3px solid #dee2e6;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1), inset 0 1px 3px rgba(255,255,255,0.8);
         }
-        .compass-rose {
+        .dial-labels {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            font-size: 14px;
+            font-weight: 700;
+            color: #4a3c2e;
+            text-transform: uppercase;
+            font-family: 'Nunito', sans-serif;
         }
-        .compass-direction-line {
+        .label { position: absolute; }
+        .label-n { top: 15px; left: 50%; transform: translateX(-50%); }
+        .label-ne { top: 15%; right: 15%; font-size: 12px; }
+        .label-e { top: 50%; right: 15px; transform: translateY(-50%); }
+        .label-se { bottom: 15%; right: 15%; font-size: 12px; }
+        .label-s { bottom: 15px; left: 50%; transform: translateX(-50%); }
+        .label-sw { bottom: 15%; left: 15%; font-size: 12px; }
+        .label-w { top: 50%; left: 15px; transform: translateY(-50%); }
+        .label-nw { top: 15%; left: 15%; font-size: 12px; }
+
+        .needle {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 45%;
-            height: 1px;
-            background-color: #dee2e6;
-            transform-origin: left center;
-        }
-        .compass-direction {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 40%;
-            height: 8px;
-            margin-top: -4px;
-            margin-left: -40%;
-            transform-origin: center;
-            transition: transform 1s ease;
-            z-index: 10;
-        }
-        .compass-arrow {
-            position: absolute;
-            top: 0;
-            left: 0;
             width: 0;
             height: 0;
-            border-style: solid;
-            border-width: 0 12px 24px 12px;
-            border-color: transparent transparent #dc3545 transparent;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 80px solid #e67e22;
+            transform-origin: bottom center;
+            bottom: 50%;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
+            transition: transform 1.5s cubic-bezier(0.19, 1, 0.22, 1);
         }
-        .compass-arrow::after {
-            content: '';
+        .pivot {
             position: absolute;
-            top: 24px;
-            left: -10px;
-            width: 0;
-            height: 0;
-            border-style: solid;
-            border-width: 20px 10px 0 10px;
-            border-color: #5cb85c transparent transparent transparent;
-        }
-        .compass-center {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 16px;
-            height: 16px;
-            background-color: #007bff;
+            width: 18px;
+            height: 18px;
+            background-color: #4a3c2e;
+            border: 3px solid #f5f0e6;
             border-radius: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 15;
-            box-shadow: 0 0 8px rgba(0,123,255,0.6);
-        }
-        .compass-labels {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        .compass-label {
-            position: absolute;
-            font-weight: bold;
-            font-size: 16px;
-            color: #495057;
-            text-shadow: 0 1px 2px rgba(255,255,255,0.8);
-        }
-        .label-n {
-            top: 8px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        .label-ne {
-            top: 15%;
-            right: 15%;
-            font-size: 14px;
-        }
-        .label-e {
-            top: 50%;
-            right: 8px;
-            transform: translateY(-50%);
-        }
-        .label-se {
-            bottom: 15%;
-            right: 15%;
-            font-size: 14px;
-        }
-        .label-s {
-            bottom: 8px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        .label-sw {
-            bottom: 15%;
-            left: 15%;
-            font-size: 14px;
-        }
-        .label-w {
-            top: 50%;
-            left: 8px;
-            transform: translateY(-50%);
-        }
-        .label-nw {
-            top: 15%;
-            left: 15%;
-            font-size: 14px;
         }
         .wind-info {
             text-align: center;
             margin-top: 15px;
-            font-size: 16px;
-            background-color: #f8f9fa;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
         }
         .wind-speed {
-            font-weight: bold;
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1;
             color: #0a9396;
-            font-size: 18px;
         }
-        .wind-direction {
-            font-weight: bold;
-            color: #005f73;
-            font-size: 18px;
+        .wind-speed span {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #777;
         }
-        .wind-details {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 8px;
+        .wind-strength {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #555;
+            margin-top: 5px;
         }
-        .wind-detail {
-            text-align: center;
-        }
-        .wind-detail-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: #007bff;
-        }
-        .wind-detail-label {
-            font-size: 12px;
-            color: #6c757d;
+        .wind-direction-info {
+            font-size: 1rem;
+            color: #555;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
         }
         
         /* Style dla GPS */
@@ -766,41 +700,27 @@
                         <div id="wind-chart-container">
                             <h3>Kierunek i siła wiatru</h3>
                             <div class="wind-compass-container">
-                                <div class="wind-compass">
-                                    <div class="compass-face">
-                                        <div class="compass-rose">
-                                            <div class="compass-direction-line" style="transform: rotate(0deg);"></div>
-                                            <div class="compass-direction-line" style="transform: rotate(45deg);"></div>
-                                            <div class="compass-direction-line" style="transform: rotate(90deg);"></div>
-                                            <div class="compass-direction-line" style="transform: rotate(135deg);"></div>
-                                        </div>
-                                        <div class="compass-direction" id="compass-direction">
-                                            <div class="compass-arrow"></div>
-                                        </div>
-                                        <div class="compass-center"></div>
-                                        <div class="compass-labels">
-                                            <div class="compass-label label-n">N</div>
-                                            <div class="compass-label label-ne">NE</div>
-                                            <div class="compass-label label-e">E</div>
-                                            <div class="compass-label label-se">SE</div>
-                                            <div class="compass-label label-s">S</div>
-                                            <div class="compass-label label-sw">SW</div>
-                                            <div class="compass-label label-w">W</div>
-                                            <div class="compass-label label-nw">NW</div>
+                                <div class="fishing-widget">
+                                    <div class="dial">
+                                         <div class="dial-labels">
+                                            <div class="label label-n">Północ</div>
+                                            <div class="label label-ne">Płn-Wsch</div>
+                                            <div class="label label-e">Wschód</div>
+                                            <div class="label label-se">Płd-Wsch</div>
+                                            <div class="label label-s">Południe</div>
+                                            <div class="label label-sw">Płd-Zach</div>
+                                            <div class="label label-w">Zachód</div>
+                                            <div class="label label-nw">Płn-Zach</div>
                                         </div>
                                     </div>
+                                    <div class="needle" id="windNeedle"></div>
+                                    <div class="pivot"></div>
                                 </div>
+                                
                                 <div class="wind-info">
-                                    <div class="wind-details">
-                                        <div class="wind-detail">
-                                            <div class="wind-detail-value" id="wind-speed-value">-</div>
-                                            <div class="wind-detail-label">m/s</div>
-                                        </div>
-                                        <div class="wind-detail">
-                                            <div class="wind-detail-value" id="wind-direction-value">-</div>
-                                            <div class="wind-detail-label">Kierunek</div>
-                                        </div>
-                                    </div>
+                                    <div class="wind-speed" id="wind-speed-value">-<span> km/h</span></div>
+                                    <div class="wind-strength" id="wind-strength-value">Sprawdzanie...</div>
+                                    <div class="wind-direction-info" id="wind-direction-info"></div>
                                 </div>
                             </div>
                         </div>
@@ -1810,7 +1730,7 @@
                     }
                 }
             } else {
-                statusDiv.textContent = "GPS nie jest dostępny, używam ostatniej miejscowości.";
+                statusDiv.textContent = "GPS nie jest dostępny, używam ostatniej wpisanej miejscowości.";
                 
                 // Użyj ostatniej wpisanej miejscowości
                 if (!currentWeatherData) {
@@ -2676,17 +2596,43 @@
             });
         }
 
+        // Zaktualizowana funkcja wyświetlania kompasu wiatru
         function displayWindChart(current) {
             const windSpeed = current.wind.speed;
             const windDirection = current.wind.deg;
             
-            // Zaktualizuj wartości wiatru w interfejsie
-            document.getElementById('wind-speed-value').textContent = windSpeed.toFixed(1);
-            document.getElementById('wind-direction-value').textContent = getWindDirectionName(windDirection);
+            // Konwersja m/s na km/h
+            const windSpeedKmh = (windSpeed * 3.6).toFixed(1);
             
-            // Ustaw kierunek strzałki kompasu
-            const compassDirection = document.getElementById('compass-direction');
-            compassDirection.style.transform = `rotate(${windDirection}deg)`;
+            // Ustaw kierunek wskazówki kompasu
+            const needle = document.getElementById('windNeedle');
+            needle.style.transform = `rotate(${windDirection}deg)`;
+            
+            // Zaktualizuj panel informacyjny
+            document.getElementById('wind-speed-value').innerHTML = `${windSpeedKmh}<span> km/h</span>`;
+            document.getElementById('wind-strength-value').textContent = getWindStrengthLabel(windSpeed);
+            document.getElementById('wind-direction-info').textContent = `Wiatr z kierunku: ${degreesToPolishDirection(windDirection)} (${windDirection}°)`;
+        }
+
+        // Funkcja pomocnicza do określania siły wiatru
+        function getWindStrengthLabel(speed) {
+            // Prędkość w m/s
+            if (speed < 1) return 'Flauta';
+            if (speed < 3) return 'Lekki wiatr';
+            if (speed < 6) return 'Umiarkowany wiatr';
+            if (speed < 11) return 'Dość silny wiatr';
+            if (speed < 17) return 'Silny wiatr';
+            if (speed < 25) return 'Bardzo silny wiatr';
+            return 'Sztorm';
+        }
+        
+        // Funkcja konwertująca stopnie na polską nazwę kierunku
+        function degreesToPolishDirection(degrees) {
+            const directions = [
+                'Północny', 'Płn-Wsch', 'Wschodni', 'Płd-Wsch', 
+                'Południowy', 'Płd-Zach', 'Zachodni', 'Płn-Zach'
+            ];
+            return directions[Math.round((degrees % 360) / 45) % 8];
         }
 
         function getWindDirectionName(degrees) {
@@ -2699,6 +2645,21 @@
             ];
             const index = Math.round((degrees % 360) / 22.5) % 16;
             return directions[index];
+        }
+
+        function getWindDirectionWithArrow(degrees) {
+            const directions = [
+                { name: 'N', arrow: '↑' },
+                { name: 'NE', arrow: '↗' },
+                { name: 'E', arrow: '→' },
+                { name: 'SE', arrow: '↘' },
+                { name: 'S', arrow: '↓' },
+                { name: 'SW', arrow: '↙' },
+                { name: 'W', arrow: '←' },
+                { name: 'NW', arrow: '↖' }
+            ];
+            const index = Math.round((degrees % 360) / 45) % 8;
+            return directions[index].name + ' ' + directions[index].arrow;
         }
 
         function calculate24HourForecast(species, current, forecast) {
