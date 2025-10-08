@@ -684,6 +684,32 @@
         .quick-catch-btn:hover {
             background-color: #138496;
         }
+        
+        /* Style dla sekcji instrukcji GPS */
+        .gps-instructions {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #007bff;
+        }
+        .gps-instructions h4 {
+            margin-top: 0;
+            color: #005f73;
+        }
+        .gps-instructions ol {
+            padding-left: 20px;
+        }
+        .gps-instructions li {
+            margin-bottom: 8px;
+        }
+        .retry-gps-btn {
+            background-color: #007bff;
+            margin-top: 10px;
+        }
+        .retry-gps-btn:hover {
+            background-color: #0069d9;
+        }
     </style>
 </head>
 <body>
@@ -700,6 +726,19 @@
             </select>
             <button onclick="debouncedFetchData()" aria-label="Sprawdź prognozę aktywności ryb">Sprawdź Prognozę</button>
         </div>
+        
+        <!-- Sekcja instrukcji GPS -->
+        <div id="gps-instructions" style="display: none;">
+            <h4>📍 Jak włączyć lokalizację GPS</h4>
+            <p>Jeśli masz problemy z dostępem do lokalizacji:</p>
+            <ol>
+                <li><strong>Na telefonie:</strong> Przejdź do Ustawień > Aplikacje > Twoja przeglądarka > Uprawnienia > Włącz lokalizację</li>
+                <li><strong>W przeglądarce:</strong> Kliknij ikonę kłódki w pasku adresu i włącz lokalizację</li>
+                <li><strong>Ważne:</strong> Strona musi być otwarta przez HTTPS (zielona kłódka)</li>
+                <li><strong>Alternatywa:</strong> Możesz ręcznie wpisać współrzędne GPS</li>
+            </ol>
+        </div>
+        
         <div id="loader">Ładowanie danych...</div>
         <div id="results" style="display:none;">
             <div id="current-weather"></div>
@@ -1176,10 +1215,12 @@
         // Funkcja do sprawdzania uprawnień lokalizacji
         function checkLocationPermission() {
             const statusElement = document.getElementById('gps-status');
+            const instructionsElement = document.getElementById('gps-instructions');
             
             if (!navigator.geolocation) {
                 statusElement.textContent = 'Geolokalizacja nie jest wspierana przez tę przeglądarkę';
                 statusElement.style.color = '#dc3545';
+                instructionsElement.style.display = 'block';
                 return false;
             }
 
@@ -1191,9 +1232,14 @@
                     } else if (result.state === 'prompt') {
                         getGPSLocation();
                     } else if (result.state === 'denied') {
-                        statusElement.textContent = 'Odmówiono dostępu do lokalizacji. Sprawdź ustawienia.';
+                        statusElement.textContent = 'Odmówiono dostępu do lokalizacji. Sprawdź ustawienia przeglądarki.';
                         statusElement.style.color = '#dc3545';
+                        instructionsElement.style.display = 'block';
+                        addRetryButton(statusElement);
                     }
+                }).catch(error => {
+                    console.error('Błąd sprawdzania uprawnień:', error);
+                    getGPSLocation();
                 });
             } else {
                 getGPSLocation();
@@ -1203,9 +1249,17 @@
         // Funkcja do pobierania lokalizacji GPS
         function getGPSLocation() {
             const statusElement = document.getElementById('gps-status');
+            const instructionsElement = document.getElementById('gps-instructions');
             statusElement.textContent = 'Pobieranie lokalizacji...';
+            instructionsElement.style.display = 'none';
             
             if ('geolocation' in navigator) {
+                const options = {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 0
+                };
+                
                 navigator.geolocation.getCurrentPosition(
                     async (position) => {
                         currentLatitude = position.coords.latitude;
@@ -1218,10 +1272,10 @@
                         statusElement.textContent = 'Pobieranie nazwy lokalizacji...';
                         try {
                             const locationName = await getLocationName(currentLatitude, currentLongitude);
-                            statusElement.innerHTML = `Lokalizacja została pobrana pomyślnie<br><small>${locationName}</small>`;
+                            statusElement.innerHTML = `✅ Lokalizacja została pobrana pomyślnie<br><small>${locationName}</small>`;
                             statusElement.style.color = '#28a745';
                         } catch (error) {
-                            statusElement.textContent = 'Lokalizacja została pobrana pomyślnie';
+                            statusElement.textContent = '✅ Lokalizacja została pobrana pomyślnie';
                             statusElement.style.color = '#28a745';
                         }
                     },
@@ -1229,28 +1283,49 @@
                         let errorMessage = 'Nie udało się pobrać lokalizacji';
                         switch(error.code) {
                             case error.PERMISSION_DENIED:
-                                errorMessage = "Użytkownik odmówił zgody na geolokalizację";
+                                errorMessage = "❌ Odmówiono zgody na geolokalizację. Sprawdź ustawienia przeglądarki.";
+                                instructionsElement.style.display = 'block';
                                 break;
                             case error.POSITION_UNAVAILABLE:
-                                errorMessage = "Informacje o lokalizacji są niedostępne";
+                                errorMessage = "❌ Informacje o lokalizacji są niedostępne. Sprawdź połączenie z internetem.";
                                 break;
                             case error.TIMEOUT:
-                                errorMessage = "Przekroczono czas oczekiwania na lokalizację";
+                                errorMessage = "❌ Przekroczono czas oczekiwania na lokalizację. Spróbuj ponownie.";
                                 break;
                         }
                         statusElement.textContent = errorMessage;
                         statusElement.style.color = '#dc3545';
+                        
+                        // Add retry button
+                        addRetryButton(statusElement);
                     },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 15000,
-                        maximumAge: 0
-                    }
+                    options
                 );
             } else {
-                statusElement.textContent = 'Geolokalizacja nie jest wspierana przez tę przeglądarkę';
+                statusElement.textContent = '❌ Geolokalizacja nie jest wspierana przez tę przeglądarkę';
                 statusElement.style.color = '#dc3545';
+                instructionsElement.style.display = 'block';
             }
+        }
+
+        // Funkcja pomocnicza do dodawania przycisku ponownej próby
+        function addRetryButton(container) {
+            // Remove existing retry button if any
+            const existingBtn = container.querySelector('#retry-gps-btn');
+            if (existingBtn) {
+                existingBtn.remove();
+            }
+
+            const retryBtn = document.createElement('button');
+            retryBtn.id = 'retry-gps-btn';
+            retryBtn.textContent = 'Spróbuj ponownie';
+            retryBtn.className = 'retry-gps-btn';
+            retryBtn.style.marginTop = '10px';
+            retryBtn.onclick = () => {
+                retryBtn.remove();
+                getGPSLocation();
+            };
+            container.appendChild(retryBtn);
         }
 
         // Funkcja do pobierania nazwy lokalizacji ze współrzędnych
@@ -1291,7 +1366,7 @@
             const longitude = document.getElementById('catch-longitude').value;
             
             if (latitude && longitude) {
-                // POPRAWIONY LINK
+                // Poprawiony link
                 const googleMapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
                 window.open(googleMapsUrl, '_blank');
             } else {
@@ -1690,17 +1765,49 @@
                     
                     // Pobierz dane pogodowe dla aktualnej lokalizacji
                     weatherData = await getWeatherForCoordinates(latitude, longitude);
-                    statusDiv.textContent = "Użyto lokalizacji GPS do prognozy.";
+                    statusDiv.textContent = "✅ Użyto lokalizacji GPS do prognozy.";
                 } catch (error) {
                     console.error("Błąd pobierania lokalizacji GPS:", error);
-                    statusDiv.textContent = "Nie udało się pobrać lokalizacji GPS, używam ostatniej miejscowości.";
                     
-                    // Użyj ostatniej wpisanej miejscowości
-                    if (!currentWeatherData) {
-                        alert("Najpierw pobierz dane pogodowe dla jakiejś miejscowości!");
-                        return;
+                    // Jeśli odmówiono uprawnień, zapytaj użytkownika czy chce ręcznie wpisać współrzędne
+                    if (error.message && error.message.includes('denied')) {
+                        const manualEntry = confirm("Odmówiono dostępu do lokalizacji. Czy chcesz ręcznie wpisać współrzędne?");
+                        if (manualEntry) {
+                            const latitude = prompt("Wpisz szerokość geograficzną (np. 54.12345):");
+                            const longitude = prompt("Wpisz długość geograficzną (np. 18.54321):");
+                            
+                            if (latitude && longitude) {
+                                try {
+                                    weatherData = await getWeatherForCoordinates(parseFloat(latitude), parseFloat(longitude));
+                                    statusDiv.textContent = "✅ Użyto ręcznie wpisanych współrzędnych do prognozy.";
+                                } catch (err) {
+                                    console.error("Błąd pobierania danych dla ręcznych współrzędnych:", err);
+                                    statusDiv.textContent = "❌ Nie udało się pobrać danych dla podanych współrzędnych.";
+                                    return;
+                                }
+                            } else {
+                                statusDiv.textContent = "Anulowano ręczne wpisywanie współrzędnych.";
+                                return;
+                            }
+                        } else {
+                            statusDiv.textContent = "Używam ostatniej wpisanej miejscowości.";
+                            // Użyj ostatniej wpisanej miejscowości
+                            if (!currentWeatherData) {
+                                alert("Najpierw pobierz dane pogodowe dla jakiejś miejscowości!");
+                                return;
+                            }
+                            weatherData = currentWeatherData;
+                        }
+                    } else {
+                        statusDiv.textContent = "Używam ostatniej wpisanej miejscowości.";
+                        
+                        // Użyj ostatniej wpisanej miejscowości
+                        if (!currentWeatherData) {
+                            alert("Najpierw pobierz dane pogodowe dla jakiejś miejscowości!");
+                            return;
+                        }
+                        weatherData = currentWeatherData;
                     }
-                    weatherData = currentWeatherData;
                 }
             } else {
                 statusDiv.textContent = "GPS nie jest dostępny, używam ostatniej miejscowości.";
@@ -1769,6 +1876,11 @@
         // Funkcja pomocnicza do pobierania aktualnej pozycji
         function getCurrentPosition() {
             return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('Geolokalizacja nie jest wspierana'));
+                    return;
+                }
+                
                 navigator.geolocation.getCurrentPosition(resolve, reject, {
                     enableHighAccuracy: true,
                     timeout: 10000,
